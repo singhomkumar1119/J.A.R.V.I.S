@@ -185,9 +185,13 @@ export default function Terminal({ onStatusChange }) {
 
   const executeLocalAction = (userText) => {
     const text = userText.toLowerCase().trim();
+    // Strip spaces and apostrophes so speech-to-text quirks like
+    // "what's app" / "linked in" still match "whatsapp" / "linkedin".
+    const normalize = (s) => s.replace(/['\u2019]/g, '').replace(/\s+/g, '');
+    const normText = normalize(text);
 
     for (const app of APP_LINKS) {
-      if (app.keys.some(key => text.includes(key))) {
+      if (app.keys.some(key => normText.includes(normalize(key)))) {
         window.open(app.url, '_blank');
         return `Opening ${app.name} for you, sir.`;
       }
