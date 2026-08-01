@@ -245,7 +245,7 @@ export default function Terminal({ onStatusChange }) {
       const messages = [
         { 
           role: 'system', 
-          content: 'You are J.A.R.V.I.S., a highly advanced AI assistant. Keep your answers brief, clear, and direct, suitable for speech synthesis. Do not use markdown or emojis.' 
+          content: 'You are J.A.R.V.I.S., a highly advanced AI assistant with real-time access to the internet via web search. Use it whenever a question depends on current, live, or specific factual information (news, weather, prices, sports scores, people, places, general knowledge, etc.) rather than relying only on what you already know. Keep your answers brief, clear, and direct, suitable for speech synthesis. Do not use markdown or emojis.' 
         },
         ...history.slice(-6).map(msg => ({ role: msg.role, content: msg.text })),
         { role: 'user', content: userText }
@@ -253,12 +253,22 @@ export default function Terminal({ onStatusChange }) {
 
       const completion = await groq.chat.completions.create({
         messages: messages,
-        model: 'openai/gpt-oss-20b',
+        model: 'groq/compound-mini',
         temperature: 0.6,
-        max_tokens: 100,
+        max_tokens: 180,
       });
 
       const jarvisResponse = completion.choices[0]?.message?.content || "I couldn't process that, sir.";
+
+      // Surface which web sources (if any) were used, for transparency —
+      // shown in the UI only, never read aloud by TTS.
+      const searchResults = completion.choices[0]?.message?.executed_tools?.[0]?.search_results;
+      if (searchResults && searchResults.length > 0) {
+        const sourceNames = searchResults.slice(0, 3).map(r => r.title || r.url).filter(Boolean);
+        if (sourceNames.length > 0) {
+          setMicLog(`🌐 sources: ${sourceNames.join(' | ')}`);
+        }
+      }
       
       setHistory(prev => [...prev, 
         { role: 'user', text: userText },
