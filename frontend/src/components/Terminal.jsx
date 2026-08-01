@@ -19,6 +19,7 @@ export default function Terminal({ onStatusChange }) {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [micAllowed, setMicAllowed] = useState(true);
   const [commandCount, setCommandCount] = useState(0);
+  const [debugError, setDebugError] = useState(null);
   
   const recognitionRef = useRef(null);
   const isAllowedRef = useRef(true);
@@ -164,6 +165,7 @@ export default function Terminal({ onStatusChange }) {
 
     setIsProcessing(true);
     setLatestResponse('');
+    setDebugError(null);
     setCommandCount(prev => prev + 1);
     shouldListenRef.current = false;
     if (recognitionRef.current) {
@@ -216,9 +218,15 @@ export default function Terminal({ onStatusChange }) {
 
     } catch (error) {
       console.error("Groq Error:", error);
-      const errorMsg = "System connection error.";
+      const detail = error?.error?.error?.message || error?.message || 'Unknown error';
+      const errorMsg = `Error: ${detail}`;
+      setDebugError(errorMsg);
+      setHistory(prev => [...prev,
+        { role: 'user', text: userText },
+        { role: 'assistant', text: errorMsg }
+      ]);
       setLatestResponse(errorMsg);
-      await speakResponse(errorMsg);
+      await speakResponse('System connection error.');
     } finally {
       setIsProcessing(false);
       shouldListenRef.current = true;
@@ -330,6 +338,26 @@ export default function Terminal({ onStatusChange }) {
 
   return (
     <div className="jarvis-terminal">
+      {debugError && (
+        <div style={{
+          position: 'fixed',
+          top: '10px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: '#3a0000',
+          color: '#ff6b6b',
+          border: '1px solid #ff0000',
+          padding: '10px 16px',
+          borderRadius: '6px',
+          fontFamily: 'monospace',
+          fontSize: '13px',
+          zIndex: 9999,
+          maxWidth: '90vw',
+          textAlign: 'center'
+        }}>
+          {debugError}
+        </div>
+      )}
       <div className="jarvis-terminal-bar">
         <button 
           className={`jarvis-mic-btn ${micAllowed ? (isListening ? 'active' : '') : 'denied'}`}
