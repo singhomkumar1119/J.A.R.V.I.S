@@ -246,10 +246,14 @@ export default function Terminal({ onStatusChange }) {
     }
 
     try {
+      const now = new Date();
+      const dateString = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+      const timeString = now.toLocaleTimeString('en-US');
+
       const messages = [
         { 
           role: 'system', 
-          content: 'You are J.A.R.V.I.S., a highly advanced AI assistant with real-time access to the internet via web search. Use it whenever a question depends on current, live, or specific factual information (news, weather, prices, sports scores, people, places, general knowledge, etc.) rather than relying only on what you already know. Keep your answers brief, clear, and direct, suitable for speech synthesis. Do not use markdown or emojis.' 
+          content: `You are J.A.R.V.I.S., a highly advanced AI assistant with real-time access to the internet via web search. Today's real date is ${dateString}, current time ${timeString}. Always treat this as the true current date, not any date you might otherwise assume from training. Use web search whenever a question depends on current, live, recent, or specific factual information (news, weather, prices, sports scores, people, places, releases, events, general knowledge, etc.) — always prefer the latest available information over older knowledge, and default to the newest/most recent facts unless the user asks about the past specifically. Keep your answers brief, clear, and direct, suitable for speech synthesis. Do not use markdown or emojis.` 
         },
         ...history.slice(-6).map(msg => ({ role: msg.role, content: msg.text })),
         { role: 'user', content: userText }
