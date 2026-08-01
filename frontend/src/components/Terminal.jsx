@@ -20,6 +20,7 @@ export default function Terminal({ onStatusChange }) {
   const [micAllowed, setMicAllowed] = useState(true);
   const [commandCount, setCommandCount] = useState(0);
   const [debugError, setDebugError] = useState(null);
+  const [micLog, setMicLog] = useState('Waiting for mic activity...');
   
   const recognitionRef = useRef(null);
   const isAllowedRef = useRef(true);
@@ -277,10 +278,18 @@ export default function Terminal({ onStatusChange }) {
       setIsListening(true);
       isAllowedRef.current = true;
       setMicAllowed(true);
+      setMicLog('🎙️ recognition started — listening...');
+    };
+
+    recognition.onspeechstart = () => {
+      setMicLog('🗣️ speech detected...');
     };
 
     recognition.onresult = (event) => {
-      if (!shouldListenRef.current) return;
+      if (!shouldListenRef.current) {
+        setMicLog('⚠️ got result but shouldListen=false, ignoring');
+        return;
+      }
 
       let finalText = '';
       let currentInterim = '';
@@ -297,6 +306,7 @@ export default function Terminal({ onStatusChange }) {
       const activeText = (finalText || currentInterim).trim();
       currentInterimRef.current = activeText;
       setInterimText(activeText);
+      setMicLog(`📝 heard: "${activeText}"`);
 
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       
@@ -305,6 +315,7 @@ export default function Terminal({ onStatusChange }) {
           if (currentInterimRef.current && shouldListenRef.current && !isProcessing && !isSpeaking) {
             const textToSend = currentInterimRef.current;
             currentInterimRef.current = '';
+            setMicLog(`📤 sending: "${textToSend}"`);
             processWithGroq(textToSend);
           }
         }, 1200);
@@ -312,6 +323,7 @@ export default function Terminal({ onStatusChange }) {
     };
 
     recognition.onerror = (event) => {
+      setMicLog(`❌ recognition error: ${event.error}`);
       if (event.error === 'not-allowed' || event.error === 'audio-capture') {
         isAllowedRef.current = false;
         setMicAllowed(false);
@@ -321,12 +333,15 @@ export default function Terminal({ onStatusChange }) {
 
     recognition.onend = () => {
       setIsListening(false);
+      setMicLog(prev => prev + ' → ended');
       
       if (isAllowedRef.current && shouldListenRef.current) {
         setTimeout(() => {
           try {
             if (shouldListenRef.current) recognition.start();
-          } catch (e) {}
+          } catch (e) {
+            setMicLog(`❌ restart failed: ${e.message}`);
+          }
         }, 300);
       }
     };
@@ -376,6 +391,24 @@ export default function Terminal({ onStatusChange }) {
           {debugError}
         </div>
       )}
+      <div style={{
+        position: 'fixed',
+        top: debugError ? '55px' : '10px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        background: 'rgba(0,20,10,0.9)',
+        color: '#00ffaa',
+        border: '1px solid #00ffaa',
+        padding: '6px 14px',
+        borderRadius: '6px',
+        fontFamily: 'monospace',
+        fontSize: '12px',
+        zIndex: 9998,
+        maxWidth: '90vw',
+        textAlign: 'center'
+      }}>
+        MIC DEBUG: {micLog}
+      </div>
       <div className="jarvis-terminal-bar">
         <button 
           className={`jarvis-mic-btn ${micAllowed ? (isListening ? 'active' : '') : 'denied'}`}
