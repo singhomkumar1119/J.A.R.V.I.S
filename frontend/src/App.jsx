@@ -12,7 +12,7 @@ import GreetingWidget from './components/GreetingWidget.jsx';
 
 function App() {
   const [blobConfig, setBlobConfig] = useState({
-    color: '#0084ff',
+    color: localStorage.getItem('jarvis_blob_color') || '#0084ff',
     size: 1,
     position: { x: 0, y: 0 }
   });
@@ -37,6 +37,12 @@ function App() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  useEffect(() => {
+    if (blobConfig.color) {
+      localStorage.setItem('jarvis_blob_color', blobConfig.color);
+    }
+  }, [blobConfig.color]);
 
   return (
     <div 
