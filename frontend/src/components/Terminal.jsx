@@ -17,7 +17,7 @@ export default function Terminal({ onStatusChange }) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [micAllowed, setMicAllowed] = useState(true);
+  const [micAllowed, setMicAllowed] = useState(false);
   const [commandCount, setCommandCount] = useState(0);
   const [debugError, setDebugError] = useState(null);
   const [micLog, setMicLog] = useState('Waiting for mic activity...');
@@ -43,20 +43,29 @@ export default function Terminal({ onStatusChange }) {
 
   // Request Microphone Access manually via user click
   const requestMicAccess = async () => {
+    setMicLog('🔑 requesting mic permission...');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       stream.getTracks().forEach(track => track.stop());
-      
+      setMicLog('✅ mic permission granted, starting recognition...');
+
       isAllowedRef.current = true;
       setMicAllowed(true);
       shouldListenRef.current = true;
       setLatestResponse('Microphone access granted.');
 
       if (recognitionRef.current) {
-        try { recognitionRef.current.start(); } catch (e) {}
+        try {
+          recognitionRef.current.start();
+        } catch (e) {
+          setMicLog(`❌ recognition.start() threw: ${e.message}`);
+        }
+      } else {
+        setMicLog('❌ no recognition instance available (unsupported browser?)');
       }
     } catch (e) {
       console.warn("Microphone access denied:", e);
+      setMicLog(`❌ getUserMedia failed: ${e.name} - ${e.message}`);
       isAllowedRef.current = false;
       setMicAllowed(false);
       setLatestResponse('Microphone access denied. Click mic button to enable.');
@@ -346,11 +355,13 @@ export default function Terminal({ onStatusChange }) {
       }
     };
 
-    setTimeout(() => {
-      try {
-        if (shouldListenRef.current) recognition.start();
-      } catch (e) {}
-    }, 500);
+    // NOTE: we deliberately do NOT auto-start recognition here on mount.
+    // Mobile browsers require SpeechRecognition.start() to happen as a
+    // direct result of a user gesture (like tapping the mic button).
+    // Auto-starting here without a gesture can silently create a broken
+    // "zombie" session that reports as listening but never captures audio.
+    // The mic button's requestMicAccess() is now the only place that
+    // starts recognition for the first time.
 
     return () => {
       recognition.onend = null;
