@@ -145,30 +145,54 @@ export default function Terminal({ onStatusChange }) {
     });
   };
 
-  // Action executor for commands like "open youtube", "search ...", etc.
+  // Action executor for commands like "open whatsapp", "search ...", etc.
+  // Ordered from most specific phrase to least specific, so "open google docs"
+  // matches Docs before the generic "google" catch-all further down.
+  const APP_LINKS = [
+    { keys: ['google docs', 'open docs'], url: 'https://docs.google.com', name: 'Google Docs' },
+    { keys: ['google sheets', 'open sheets'], url: 'https://sheets.google.com', name: 'Google Sheets' },
+    { keys: ['google drive', 'open drive'], url: 'https://drive.google.com', name: 'Google Drive' },
+    { keys: ['google maps', 'open maps'], url: 'https://maps.google.com', name: 'Google Maps' },
+    { keys: ['google calendar', 'open calendar'], url: 'https://calendar.google.com', name: 'Google Calendar' },
+    { keys: ['gmail', 'open email', 'open mail'], url: 'https://mail.google.com', name: 'Gmail' },
+    { keys: ['whatsapp'], url: 'https://web.whatsapp.com', name: 'WhatsApp' },
+    { keys: ['telegram'], url: 'https://web.telegram.org', name: 'Telegram' },
+    { keys: ['instagram'], url: 'https://www.instagram.com', name: 'Instagram' },
+    { keys: ['facebook'], url: 'https://www.facebook.com', name: 'Facebook' },
+    { keys: ['twitter', 'open x'], url: 'https://www.x.com', name: 'X' },
+    { keys: ['linkedin'], url: 'https://www.linkedin.com', name: 'LinkedIn' },
+    { keys: ['tiktok'], url: 'https://www.tiktok.com', name: 'TikTok' },
+    { keys: ['snapchat'], url: 'https://web.snapchat.com', name: 'Snapchat' },
+    { keys: ['pinterest'], url: 'https://www.pinterest.com', name: 'Pinterest' },
+    { keys: ['notion'], url: 'https://www.notion.so', name: 'Notion' },
+    { keys: ['trello'], url: 'https://trello.com', name: 'Trello' },
+    { keys: ['slack'], url: 'https://slack.com', name: 'Slack' },
+    { keys: ['netflix'], url: 'https://www.netflix.com', name: 'Netflix' },
+    { keys: ['prime video', 'amazon prime'], url: 'https://www.primevideo.com', name: 'Prime Video' },
+    { keys: ['hotstar', 'disney plus', 'disney+'], url: 'https://www.hotstar.com', name: 'Hotstar' },
+    { keys: ['twitch'], url: 'https://www.twitch.tv', name: 'Twitch' },
+    { keys: ['amazon'], url: 'https://www.amazon.in', name: 'Amazon' },
+    { keys: ['flipkart'], url: 'https://www.flipkart.com', name: 'Flipkart' },
+    { keys: ['chatgpt'], url: 'https://chat.openai.com', name: 'ChatGPT' },
+    { keys: ['claude'], url: 'https://claude.ai', name: 'Claude' },
+    { keys: ['stack overflow', 'stackoverflow'], url: 'https://stackoverflow.com', name: 'Stack Overflow' },
+    { keys: ['spotify'], url: 'https://open.spotify.com', name: 'Spotify' },
+    { keys: ['reddit'], url: 'https://www.reddit.com', name: 'Reddit' },
+    { keys: ['github'], url: 'https://www.github.com', name: 'GitHub' },
+    { keys: ['youtube'], url: 'https://www.youtube.com', name: 'YouTube' },
+    { keys: ['google'], url: 'https://www.google.com', name: 'Google' },
+  ];
+
   const executeLocalAction = (userText) => {
     const text = userText.toLowerCase().trim();
 
-    if (text.includes('open youtube') || text.includes('youtube')) {
-      window.open('https://www.youtube.com', '_blank');
-      return 'Opening YouTube for you, sir.';
+    for (const app of APP_LINKS) {
+      if (app.keys.some(key => text.includes(key))) {
+        window.open(app.url, '_blank');
+        return `Opening ${app.name} for you, sir.`;
+      }
     }
-    if (text.includes('open google') || text.includes('google')) {
-      window.open('https://www.google.com', '_blank');
-      return 'Opening Google, sir.';
-    }
-    if (text.includes('open github') || text.includes('github')) {
-      window.open('https://www.github.com', '_blank');
-      return 'Opening GitHub, sir.';
-    }
-    if (text.includes('open spotify') || text.includes('spotify')) {
-      window.open('https://open.spotify.com', '_blank');
-      return 'Opening Spotify, sir.';
-    }
-    if (text.includes('open reddit') || text.includes('reddit')) {
-      window.open('https://www.reddit.com', '_blank');
-      return 'Opening Reddit, sir.';
-    }
+
     if (text.startsWith('search ') || text.startsWith('google ')) {
       const q = text.replace(/^(search|google)\s+/i, '');
       window.open(`https://www.google.com/search?q=${encodeURIComponent(q)}`, '_blank');
