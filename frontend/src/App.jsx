@@ -83,7 +83,7 @@ function App() {
 
       {/* Middle Right: System Info (Clock/Weather) */}
       <DraggableWidget id="sysinfo" defaultPos={{ x: Math.max(20, screen.w - 280), y: 350 }}>
-        <SystemInfoWidget />
+        <SystemInfoWidget commandCount={jarvisStatus.commandCount || 0} />
       </DraggableWidget>
 
       {/* Bottom Center: Greeting Widget */}

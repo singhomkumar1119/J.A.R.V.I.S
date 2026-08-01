@@ -18,6 +18,7 @@ export default function Terminal({ onStatusChange }) {
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [micAllowed, setMicAllowed] = useState(true);
+  const [commandCount, setCommandCount] = useState(0);
   
   const recognitionRef = useRef(null);
   const isAllowedRef = useRef(true);
@@ -32,10 +33,11 @@ export default function Terminal({ onStatusChange }) {
         isListening,
         isProcessing,
         isSpeaking,
-        micAllowed: micAllowed
+        micAllowed: micAllowed,
+        commandCount
       });
     }
-  }, [isListening, isProcessing, isSpeaking, micAllowed, onStatusChange]);
+  }, [isListening, isProcessing, isSpeaking, micAllowed, commandCount, onStatusChange]);
 
   // Request Microphone Access manually via user click
   const requestMicAccess = async () => {
@@ -162,6 +164,7 @@ export default function Terminal({ onStatusChange }) {
 
     setIsProcessing(true);
     setLatestResponse('');
+    setCommandCount(prev => prev + 1);
     shouldListenRef.current = false;
     if (recognitionRef.current) {
       try { recognitionRef.current.abort(); } catch (e) {}
@@ -196,7 +199,7 @@ export default function Terminal({ onStatusChange }) {
 
       const completion = await groq.chat.completions.create({
         messages: messages,
-        model: 'llama-3.1-8b-instant',
+        model: 'openai/gpt-oss-20b',
         temperature: 0.6,
         max_tokens: 100,
       });

@@ -50,7 +50,9 @@ export default function StatusPanel({ status }) {
 
         <div className="status-item">
           <span className="status-label">API.LINK</span>
-          <span className="status-value success">CONNECTED</span>
+          <span className={`status-value ${import.meta.env.VITE_GROQ_API_KEY ? 'success' : 'error'}`}>
+            {import.meta.env.VITE_GROQ_API_KEY ? 'CONNECTED' : 'NO KEY'}
+          </span>
         </div>
       </div>
       
