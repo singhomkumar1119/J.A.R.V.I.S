@@ -62,24 +62,30 @@ export default function Terminal({ onStatusChange }) {
     }
   };
 
-  // Pre-fetch voices
+  // Pre-fetch voices (voices load asynchronously on many mobile browsers)
+  const voicesRef = useRef([]);
   useEffect(() => {
     if ('speechSynthesis' in window) {
-      window.speechSynthesis.getVoices();
+      const loadVoices = () => {
+        voicesRef.current = window.speechSynthesis.getVoices();
+      };
+      loadVoices();
+      window.speechSynthesis.onvoiceschanged = loadVoices;
     }
   }, []);
 
   const speakResponse = (text) => {
     return new Promise((resolve) => {
       if (!('speechSynthesis' in window)) {
+        console.warn('speechSynthesis not supported on this browser');
         resolve();
         return;
       }
-      
+
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
-      
-      const voices = window.speechSynthesis.getVoices();
+
+      const voices = voicesRef.current.length ? voicesRef.current : window.speechSynthesis.getVoices();
       const jarvisVoice = voices.find(v => 
         v.name.includes('Google UK English Male') || 
         v.name.includes('Microsoft Mark') || 
@@ -92,7 +98,24 @@ export default function Terminal({ onStatusChange }) {
       
       utterance.pitch = 0.85;
       utterance.rate = 1.05;
-      
+
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(safetyTimer);
+        setIsSpeaking(false);
+        shouldListenRef.current = true;
+        resolve();
+      };
+
+      // Safety net: some mobile browsers silently hang and never fire
+      // onstart/onend/onerror, which would freeze the app forever.
+      const safetyTimer = setTimeout(() => {
+        console.warn('speechSynthesis timed out — forcing resume');
+        finish();
+      }, 8000);
+
       utterance.onstart = () => {
         setIsSpeaking(true);
         shouldListenRef.current = false;
@@ -101,16 +124,11 @@ export default function Terminal({ onStatusChange }) {
         }
       };
       
-      utterance.onend = () => {
-        setIsSpeaking(false);
-        shouldListenRef.current = true;
-        resolve();
-      };
+      utterance.onend = finish;
       
-      utterance.onerror = () => {
-        setIsSpeaking(false);
-        shouldListenRef.current = true;
-        resolve();
+      utterance.onerror = (e) => {
+        console.error('speechSynthesis error:', e.error);
+        finish();
       };
 
       window.speechSynthesis.speak(utterance);
