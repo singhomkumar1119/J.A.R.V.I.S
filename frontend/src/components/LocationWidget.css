@@ -1,0 +1,54 @@
+.location-widget {
+  width: 200px;
+  background: rgba(5, 12, 22, 0.75);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 220, 255, 0.25);
+  border-left: 3px solid #00dcff;
+  clip-path: polygon(12px 0%, 100% 0%, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0% 100%, 0% 12px);
+  padding: 14px 18px;
+  font-family: 'JetBrains Mono', monospace;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.6), inset 0 0 15px rgba(0, 220, 255, 0.05);
+}
+
+.location-header {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  color: #00dcff;
+  letter-spacing: 2px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pin-icon {
+  color: #ff3366;
+  font-size: 12px;
+}
+
+.location-name {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 1px;
+  text-shadow: 0 0 10px rgba(0, 220, 255, 0.5);
+}
+
+.location-sub {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-top: 2px;
+}
+
+.location-coords {
+  font-size: 9px;
+  color: #00dcff;
+  margin-top: 10px;
+  letter-spacing: 1px;
+  opacity: 0.8;
+  border-top: 1px dashed rgba(0, 220, 255, 0.2);
+  padding-top: 6px;
+}

@@ -1,0 +1,95 @@
+.draggable-widget-container {
+  user-select: none;
+  transition: box-shadow 0.3s ease;
+}
+
+.draggable-widget-container.moving {
+  outline: 2px dashed #00dcff;
+  outline-offset: 4px;
+  box-shadow: 0 0 25px rgba(0, 220, 255, 0.4);
+}
+
+.widget-context-menu {
+  position: absolute;
+  z-index: 1000;
+  width: 140px;
+  background: rgba(5, 15, 25, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 220, 255, 0.4);
+  border-left: 3px solid #00dcff;
+  clip-path: polygon(10px 0%, 100% 0%, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0% 100%, 0% 10px);
+  padding: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 15px rgba(0, 220, 255, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  animation: menuPop 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+@keyframes menuPop {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.widget-context-menu .menu-header {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+  color: #00dcff;
+  letter-spacing: 1px;
+  padding: 4px 6px;
+  border-bottom: 1px solid rgba(0, 220, 255, 0.2);
+}
+
+.menu-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: rgba(0, 220, 255, 0.08);
+  border: 1px solid rgba(0, 220, 255, 0.2);
+  color: #fff;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.menu-btn:hover {
+  background: rgba(0, 220, 255, 0.25);
+  border-color: #00dcff;
+  color: #00dcff;
+  box-shadow: 0 0 10px rgba(0, 220, 255, 0.4);
+}
+
+.menu-btn.save {
+  background: rgba(0, 255, 136, 0.15);
+  border-color: rgba(0, 255, 136, 0.4);
+  color: #00ff88;
+}
+
+.menu-btn.save:hover {
+  background: rgba(0, 255, 136, 0.3);
+  box-shadow: 0 0 10px rgba(0, 255, 136, 0.4);
+}
+
+.moving-badge {
+  position: absolute;
+  top: -28px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #00dcff;
+  color: #000;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 3px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  box-shadow: 0 0 10px #00dcff;
+  white-space: nowrap;
+}

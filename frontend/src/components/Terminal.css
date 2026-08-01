@@ -1,0 +1,137 @@
+.jarvis-terminal {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  animation: terminalFadeIn 0.5s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+@keyframes terminalFadeIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+.jarvis-terminal-bar {
+  display: flex;
+  align-items: center;
+  width: 850px;
+  max-width: 92vw;
+  height: 54px;
+  padding: 0 30px;
+  
+  background: rgba(4, 12, 20, 0.85);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  
+  border: 1px solid rgba(0, 220, 255, 0.4);
+  border-radius: 12px;
+  box-shadow: 0 0 20px rgba(0, 220, 255, 0.15), inset 0 0 15px rgba(0, 220, 255, 0.05);
+  position: relative;
+}
+
+.jarvis-mic-btn {
+  background: rgba(0, 220, 255, 0.1);
+  border: 1px solid rgba(0, 220, 255, 0.3);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 14px;
+  cursor: pointer;
+  margin-right: 12px;
+  transition: all 0.3s ease;
+}
+
+.jarvis-mic-btn.active {
+  border-color: #00ff88;
+  box-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+  animation: pulseMic 1.5s infinite;
+}
+
+.jarvis-mic-btn.denied {
+  border-color: #ff3366;
+  background: rgba(255, 51, 102, 0.15);
+  box-shadow: 0 0 12px rgba(255, 51, 102, 0.6);
+  animation: flashMic 1s infinite alternate;
+}
+
+@keyframes pulseMic {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+@keyframes flashMic {
+  from { opacity: 0.7; }
+  to { opacity: 1; }
+}
+
+.jarvis-prompt {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: #00dcff;
+  letter-spacing: 2px;
+  white-space: nowrap;
+  text-shadow: 0 0 10px rgba(0, 220, 255, 0.7);
+  position: absolute;
+  left: 30px;
+}
+
+.jarvis-text-container {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  padding-left: 140px;
+  padding-right: 15px;
+}
+
+.jarvis-input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: 'Rajdhani', 'Orbitron', sans-serif;
+  font-size: 18px;
+  font-weight: 600;
+  color: #00dcff;
+  letter-spacing: 1.5px;
+  text-shadow: 0 0 8px rgba(0, 220, 255, 0.6);
+  text-align: center;
+}
+
+.jarvis-input::placeholder {
+  color: rgba(0, 220, 255, 0.5);
+  font-style: italic;
+}
+
+.jarvis-send-btn {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: #00dcff;
+  background: rgba(0, 220, 255, 0.1);
+  border: 1px solid rgba(0, 220, 255, 0.4);
+  border-radius: 4px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.jarvis-send-btn:hover {
+  background: rgba(0, 220, 255, 0.25);
+  box-shadow: 0 0 12px rgba(0, 220, 255, 0.5);
+  color: #ffffff;
+}
+
+.jarvis-terminal-handle {
+  width: 36px;
+  height: 8px;
+  border: 1.5px solid rgba(0, 220, 255, 0.4);
+  border-radius: 4px;
+  background: rgba(0, 220, 255, 0.08);
+  box-shadow: 0 0 10px rgba(0, 220, 255, 0.2);
+}

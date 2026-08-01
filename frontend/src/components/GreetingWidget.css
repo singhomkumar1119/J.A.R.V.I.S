@@ -1,0 +1,36 @@
+.greeting-widget {
+  padding: 14px 30px;
+  background: rgba(5, 12, 22, 0.75);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 220, 255, 0.3);
+  clip-path: polygon(15px 0%, 100% 0%, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0% 100%, 0% 15px);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.7), inset 0 0 20px rgba(0, 220, 255, 0.08);
+  text-align: center;
+}
+
+.greeting-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: #00dcff;
+  letter-spacing: 2px;
+  text-shadow: 0 0 12px rgba(0, 220, 255, 0.6);
+}
+
+.greeting-sub {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: 1px;
+  margin-top: 4px;
+  font-style: italic;
+}
+
+.greeting-sign {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  color: rgba(0, 220, 255, 0.6);
+  letter-spacing: 3px;
+  margin-top: 8px;
+}
