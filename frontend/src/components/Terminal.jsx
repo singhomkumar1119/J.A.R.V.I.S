@@ -305,7 +305,11 @@ export default function Terminal({ onStatusChange }) {
     let spoken = false;
 
     const buildGreeting = () => {
-      return 'Good afternoon.';
+      const hour = new Date().getHours();
+      let g = 'Good evening, Om.';
+      if (hour < 12) g = 'Good morning, Om.';
+      else if (hour < 17) g = 'Good afternoon, Om.';
+      return `${g} How can I help you?`;
     };
 
     const attemptGreeting = () => {
@@ -401,19 +405,19 @@ export default function Terminal({ onStatusChange }) {
     for (const app of APP_LINKS) {
       if (app.keys.some(key => normText.includes(normalize(key)))) {
         window.open(app.url, '_blank');
-        return `Opening ${app.name} for you, sir.`;
+        return `Opening ${app.name} for you, Om.`;
       }
     }
 
     if (text.startsWith('search ') || text.startsWith('google ')) {
       const q = text.replace(/^(search|google)\s+/i, '');
       window.open(`https://www.google.com/search?q=${encodeURIComponent(q)}`, '_blank');
-      return `Searching Google for ${q}, sir.`;
+      return `Searching Google for ${q}, Om.`;
     }
     if (text.startsWith('play ')) {
       const song = text.replace(/^play\s+/i, '');
       window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(song)}`, '_blank');
-      return `Searching YouTube for ${song}, sir.`;
+      return `Searching YouTube for ${song}, Om.`;
     }
 
     return null;
@@ -461,7 +465,7 @@ export default function Terminal({ onStatusChange }) {
       const messages = [
         { 
           role: 'system', 
-          content: `You are J.A.R.V.I.S., a highly advanced AI assistant with real-time access to the internet via web search. Today's real date is ${dateString}, current time ${timeString}. Always treat this as the true current date, not any date you might otherwise assume from training. Use web search whenever a question depends on current, live, recent, or specific factual information (news, weather, prices, sports scores, people, places, releases, events, general knowledge, etc.) — always prefer the latest available information over older knowledge, and default to the newest/most recent facts unless the user asks about the past specifically. Keep your answers brief, clear, and direct, suitable for speech synthesis. Do not use markdown or emojis.` 
+          content: `You are J.A.R.V.I.S., a highly advanced AI assistant serving a user named Om. Address him as "Om" (not "sir") when it feels natural. Today's real date is ${dateString}, current time ${timeString}. Always treat this as the true current date, not any date you might otherwise assume from training. Use web search whenever a question depends on current, live, recent, or specific factual information (news, weather, prices, sports scores, people, places, releases, events, general knowledge, etc.) — always prefer the latest available information over older knowledge, and default to the newest/most recent facts unless the user asks about the past specifically. Keep your answers brief, clear, and direct, suitable for speech synthesis. Do not use markdown or emojis.` 
         },
         ...history.slice(-6).map(msg => ({ role: msg.role, content: msg.text })),
         { role: 'user', content: userText }
@@ -474,7 +478,7 @@ export default function Terminal({ onStatusChange }) {
         max_tokens: 180,
       });
 
-      const jarvisResponse = completion.choices[0]?.message?.content || "I couldn't process that, sir.";
+      const jarvisResponse = completion.choices[0]?.message?.content || "I couldn't process that, Om.";
 
       // Surface which web sources (if any) were used, for transparency —
       // shown in the UI only, never read aloud by TTS.
