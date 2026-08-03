@@ -24,7 +24,12 @@ export default function Terminal({ onStatusChange }) {
   
   const recognitionRef = useRef(null);
   const isAllowedRef = useRef(true);
-  const shouldListenRef = useRef(true);
+  const shouldListenRef = useRef(false);
+  // Tracks the user's actual intent (mic toggled on/off), separate from
+  // shouldListenRef which also gets paused/resumed automatically while
+  // JARVIS is speaking. This stops JARVIS's own replies from accidentally
+  // flipping the mic back on after the user has explicitly turned it off.
+  const micEnabledRef = useRef(false);
   const silenceTimerRef = useRef(null);
   const currentInterimRef = useRef('');
 
@@ -52,6 +57,7 @@ export default function Terminal({ onStatusChange }) {
       isAllowedRef.current = true;
       setMicAllowed(true);
       shouldListenRef.current = true;
+      micEnabledRef.current = true;
       setLatestResponse('Microphone access granted.');
 
       if (recognitionRef.current) {
@@ -67,9 +73,27 @@ export default function Terminal({ onStatusChange }) {
       console.warn("Microphone access denied:", e);
       setMicLog(`❌ getUserMedia failed: ${e.name} - ${e.message}`);
       isAllowedRef.current = false;
+      micEnabledRef.current = false;
       setMicAllowed(false);
       setLatestResponse('Microphone access denied. Click mic button to enable.');
     }
+  };
+
+  // Mic button now properly toggles: tap once to turn on, tap again to
+  // turn off. Previously it only ever tried to (re)start, so there was
+  // no way to switch it off from the UI.
+  const toggleMic = () => {
+    if (isListening) {
+      shouldListenRef.current = false;
+      micEnabledRef.current = false;
+      setIsListening(false);
+      setMicLog('🔇 microphone turned off');
+      if (recognitionRef.current) {
+        try { recognitionRef.current.abort(); } catch (e) {}
+      }
+      return;
+    }
+    requestMicAccess();
   };
 
   // Pre-fetch voices (voices load asynchronously on many mobile browsers)
@@ -115,7 +139,10 @@ export default function Terminal({ onStatusChange }) {
         settled = true;
         clearTimeout(safetyTimer);
         setIsSpeaking(false);
-        shouldListenRef.current = true;
+        // Only resume listening if the user actually had the mic on —
+        // otherwise JARVIS speaking a typed-chat reply would silently
+        // flip the mic back on even after the user turned it off.
+        shouldListenRef.current = micEnabledRef.current;
         resolve();
       };
 
@@ -296,10 +323,12 @@ export default function Terminal({ onStatusChange }) {
       setLatestResponse(actionResult);
       await speakResponse(actionResult);
       setIsProcessing(false);
-      shouldListenRef.current = true;
-      try {
-        if (recognitionRef.current && isAllowedRef.current) recognitionRef.current.start();
-      } catch (e) {}
+      if (micEnabledRef.current) {
+        shouldListenRef.current = true;
+        try {
+          if (recognitionRef.current && isAllowedRef.current) recognitionRef.current.start();
+        } catch (e) {}
+      }
       return;
     }
 
@@ -357,10 +386,12 @@ export default function Terminal({ onStatusChange }) {
       await speakResponse('System connection error.');
     } finally {
       setIsProcessing(false);
-      shouldListenRef.current = true;
-      try {
-        if (recognitionRef.current && isAllowedRef.current) recognitionRef.current.start();
-      } catch (e) {}
+      if (micEnabledRef.current) {
+        shouldListenRef.current = true;
+        try {
+          if (recognitionRef.current && isAllowedRef.current) recognitionRef.current.start();
+        } catch (e) {}
+      }
     }
   };
 
@@ -523,7 +554,7 @@ export default function Terminal({ onStatusChange }) {
       <div className="jarvis-terminal-bar">
         <button 
           className={`jarvis-mic-btn ${micAllowed ? (isListening ? 'active' : '') : 'denied'}`}
-          onClick={requestMicAccess}
+          onClick={toggleMic}
           title={micAllowed ? "Microphone Active (Click to re-authorize)" : "Click to Enable Microphone Access"}
         >
           {micAllowed ? '🎙️' : '🎙️❌'}
