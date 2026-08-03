@@ -306,9 +306,9 @@ export default function Terminal({ onStatusChange }) {
 
     const buildGreeting = () => {
       const hour = new Date().getHours();
-      let g = 'Good evening, sir.';
-      if (hour < 12) g = 'Good morning, sir.';
-      else if (hour < 17) g = 'Good afternoon, sir.';
+      let g = 'Good evening.';
+      if (hour < 12) g = 'Good morning.';
+      else if (hour < 17) g = 'Good afternoon.';
       return `${g} How can I help you?`;
     };
 
