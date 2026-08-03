@@ -2,14 +2,7 @@ import React, { useState, useEffect } from 'react';
 import './GreetingWidget.css';
 
 export default function GreetingWidget() {
-  const [greeting, setGreeting] = useState('Good Afternoon');
-
-  useEffect(() => {
-    const hour = new Date().getHours();
-    if (hour < 12) setGreeting('Good Morning');
-    else if (hour < 17) setGreeting('Good Afternoon');
-    else setGreeting('Good Evening');
-  }, []);
+  const [greeting] = useState('Good Afternoon');
 
   return (
     <div className="greeting-widget">
