@@ -146,17 +146,29 @@ export default function Terminal({ onStatusChange }) {
 
     recognition.onend = () => {
       clearStallTimer();
-      setIsListening(false);
       setMicLog(prev => prev + ' → ended');
 
-      if (isAllowedRef.current && shouldListenRef.current) {
+      const willRestart = isAllowedRef.current && shouldListenRef.current;
+
+      // Only show "not listening" in the UI if we're actually stopping —
+      // if we're about to auto-restart a fresh session (the normal case
+      // whenever there's a pause in speech), keep the mic button looking
+      // active the whole time instead of flickering off and on.
+      if (!willRestart) {
+        setIsListening(false);
+      }
+
+      if (willRestart) {
         setTimeout(() => {
           if (shouldListenRef.current) {
             try {
               startRecognitionSession();
             } catch (e) {
               setMicLog(`❌ restart failed: ${e.message}`);
+              setIsListening(false);
             }
+          } else {
+            setIsListening(false);
           }
         }, 300);
       }
