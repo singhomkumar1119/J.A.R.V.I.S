@@ -409,23 +409,45 @@ export default function Terminal({ onStatusChange }) {
     }
 
     const recognition = new SpeechRecognition();
-    recognition.continuous = true;
+    // continuous:true is known to be unreliable on Android Chrome — it can
+    // report as "listening" indefinitely while silently never capturing
+    // any audio, with no error ever fired. Short single-shot sessions that
+    // auto-restart on end are the standard, more reliable workaround.
+    recognition.continuous = false;
     recognition.interimResults = true;
     recognition.lang = 'en-US';
     recognitionRef.current = recognition;
+
+    // Watchdog: if a session goes silent (no speech/result) for too long,
+    // force it to restart rather than staying stuck forever.
+    let stallTimer = null;
+    const clearStallTimer = () => {
+      if (stallTimer) clearTimeout(stallTimer);
+      stallTimer = null;
+    };
+    const armStallTimer = () => {
+      clearStallTimer();
+      stallTimer = setTimeout(() => {
+        setMicLog('⏱️ no audio detected for a while, restarting mic session...');
+        try { recognition.abort(); } catch (e) {}
+      }, 6000);
+    };
 
     recognition.onstart = () => {
       setIsListening(true);
       isAllowedRef.current = true;
       setMicAllowed(true);
       setMicLog('🎙️ recognition started — listening...');
+      armStallTimer();
     };
 
     recognition.onspeechstart = () => {
       setMicLog('🗣️ speech detected...');
+      clearStallTimer();
     };
 
     recognition.onresult = (event) => {
+      clearStallTimer();
       if (!shouldListenRef.current) {
         setMicLog('⚠️ got result but shouldListen=false, ignoring');
         return;
@@ -463,6 +485,7 @@ export default function Terminal({ onStatusChange }) {
     };
 
     recognition.onerror = (event) => {
+      clearStallTimer();
       setMicLog(`❌ recognition error: ${event.error}`);
       if (event.error === 'not-allowed' || event.error === 'audio-capture') {
         isAllowedRef.current = false;
@@ -472,6 +495,7 @@ export default function Terminal({ onStatusChange }) {
     };
 
     recognition.onend = () => {
+      clearStallTimer();
       setIsListening(false);
       setMicLog(prev => prev + ' → ended');
       
@@ -496,6 +520,7 @@ export default function Terminal({ onStatusChange }) {
 
     return () => {
       recognition.onend = null;
+      clearStallTimer();
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       try { recognition.abort(); } catch (e) {}
       window.speechSynthesis.cancel();
