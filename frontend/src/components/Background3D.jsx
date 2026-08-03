@@ -34,7 +34,8 @@ function buildSegmentedRingTexture(segments, color, gapRatio = 0.35) {
   return texture;
 }
 
-// Radial glow texture for the pulsing reactor core.
+// Radial glow texture for the pulsing reactor core — kept subtle so it
+// doesn't wash out into a giant white flare.
 function buildGlowTexture(hexColor) {
   const size = 256;
   const canvas = document.createElement('canvas');
@@ -42,9 +43,9 @@ function buildGlowTexture(hexColor) {
   canvas.height = size;
   const ctx = canvas.getContext('2d');
   const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-  grad.addColorStop(0, `${hexColor}FF`);
-  grad.addColorStop(0.25, `${hexColor}CC`);
-  grad.addColorStop(0.55, `${hexColor}44`);
+  grad.addColorStop(0, `${hexColor}AA`);
+  grad.addColorStop(0.3, `${hexColor}55`);
+  grad.addColorStop(0.6, `${hexColor}18`);
   grad.addColorStop(1, `${hexColor}00`);
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, size, size);
@@ -105,7 +106,7 @@ export default function Background3D() {
       depthWrite: false,
     });
     const glowSprite = new THREE.Sprite(glowMat);
-    glowSprite.scale.set(95, 95, 1);
+    glowSprite.scale.set(26, 26, 1);
     reactorGroup.add(glowSprite);
 
     const glowTexture2 = buildGlowTexture('#8FF7FF');
@@ -116,15 +117,15 @@ export default function Background3D() {
       depthWrite: false,
     });
     const innerGlow = new THREE.Sprite(innerGlowMat);
-    innerGlow.scale.set(40, 40, 1);
+    innerGlow.scale.set(12, 12, 1);
     reactorGroup.add(innerGlow);
 
     // ---- Concentric segmented reactor rings ----
     const ringDefs = [
-      { radius: 46, segments: 12, color: '#8FF7FF', speed: 0.35, opacity: 0.95 },
-      { radius: 60, segments: 18, color: '#27E6FF', speed: -0.22, opacity: 0.85 },
-      { radius: 76, segments: 24, color: '#1FB8FF', speed: 0.15, opacity: 0.7 },
-      { radius: 94, segments: 30, color: '#0E7FE0', speed: -0.1, opacity: 0.55 },
+      { radius: 14, segments: 12, color: '#8FF7FF', speed: 0.35, opacity: 0.95 },
+      { radius: 18.5, segments: 18, color: '#27E6FF', speed: -0.22, opacity: 0.85 },
+      { radius: 23.5, segments: 24, color: '#1FB8FF', speed: 0.15, opacity: 0.7 },
+      { radius: 29, segments: 30, color: '#0E7FE0', speed: -0.1, opacity: 0.55 },
     ];
 
     const rings = ringDefs.map((def) => {
@@ -155,9 +156,9 @@ export default function Background3D() {
     });
 
     // ---- Thin bright hairline rings between the segmented ones ----
-    const hairlineDefs = [52, 68, 85, 102];
+    const hairlineDefs = [16, 21, 26.3, 31.6];
     const hairlines = hairlineDefs.map((r, i) => {
-      const geo = new THREE.RingGeometry(r, r + 0.6, 96);
+      const geo = new THREE.RingGeometry(r, r + 0.25, 96);
       const mat = new THREE.MeshBasicMaterial({
         color: 0x9ff9ff,
         transparent: true,
@@ -178,8 +179,8 @@ export default function Background3D() {
     for (let i = 0; i < spokeCount; i++) {
       const angle = (i / spokeCount) * Math.PI * 2;
       const points = [
-        new THREE.Vector3(Math.cos(angle) * 40, Math.sin(angle) * 40, 0),
-        new THREE.Vector3(Math.cos(angle) * 100, Math.sin(angle) * 100, 0),
+        new THREE.Vector3(Math.cos(angle) * 12, Math.sin(angle) * 12, 0),
+        new THREE.Vector3(Math.cos(angle) * 30, Math.sin(angle) * 30, 0),
       ];
       const geo = new THREE.BufferGeometry().setFromPoints(points);
       const mat = new THREE.LineBasicMaterial({
@@ -192,7 +193,7 @@ export default function Background3D() {
     reactorGroup.add(spokeGroup);
 
     // ---- Outer housing ring (static, like the reactor's metal casing) ----
-    const housingGeo = new THREE.RingGeometry(103, 108, 128);
+    const housingGeo = new THREE.RingGeometry(31, 32.5, 128);
     const housingMat = new THREE.MeshBasicMaterial({
       color: 0x0a3a55,
       transparent: true,
@@ -219,8 +220,8 @@ export default function Background3D() {
 
       // Gentle pulse on the core glow, like the reactor is "breathing"
       const pulse = 1 + Math.sin(t * 1.6) * 0.08;
-      glowSprite.scale.set(95 * pulse, 95 * pulse, 1);
-      innerGlow.scale.set(40 * (1 + Math.sin(t * 2.2) * 0.12), 40 * (1 + Math.sin(t * 2.2) * 0.12), 1);
+      glowSprite.scale.set(26 * pulse, 26 * pulse, 1);
+      innerGlow.scale.set(12 * (1 + Math.sin(t * 2.2) * 0.12), 12 * (1 + Math.sin(t * 2.2) * 0.12), 1);
 
       stars.rotation.z = t * 0.005;
 
