@@ -32,6 +32,7 @@ export default function Terminal({ onStatusChange }) {
   const micEnabledRef = useRef(false);
   const silenceTimerRef = useRef(null);
   const currentInterimRef = useRef('');
+  const stallTimerRef = useRef(null);
 
   // Report status changes to parent
   useEffect(() => {
@@ -45,6 +46,128 @@ export default function Terminal({ onStatusChange }) {
       });
     }
   }, [isListening, isProcessing, isSpeaking, micAllowed, commandCount, onStatusChange]);
+
+  // Builds and starts a completely FRESH SpeechRecognition instance every
+  // single time. Reusing the same instance across many start/stop cycles
+  // is a known cause of Android Chrome silently "listening" without ever
+  // actually capturing audio again — a fresh object each time avoids that
+  // corrupted-state bug entirely.
+  const clearStallTimer = () => {
+    if (stallTimerRef.current) clearTimeout(stallTimerRef.current);
+    stallTimerRef.current = null;
+  };
+
+  const startRecognitionSession = () => {
+    if (!SpeechRecognition) return;
+
+    // Tear down any previous instance cleanly first.
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.onend = null;
+        recognitionRef.current.abort();
+      } catch (e) {}
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+    recognitionRef.current = recognition;
+
+    const armStallTimer = () => {
+      clearStallTimer();
+      stallTimerRef.current = setTimeout(() => {
+        setMicLog('⏱️ no audio detected for a while, restarting mic session...');
+        try { recognition.abort(); } catch (e) {}
+      }, 6000);
+    };
+
+    recognition.onstart = () => {
+      setIsListening(true);
+      isAllowedRef.current = true;
+      setMicAllowed(true);
+      setMicLog('🎙️ recognition started — listening (fresh session)...');
+      armStallTimer();
+    };
+
+    recognition.onspeechstart = () => {
+      setMicLog('🗣️ speech detected...');
+      clearStallTimer();
+    };
+
+    recognition.onresult = (event) => {
+      clearStallTimer();
+      if (!shouldListenRef.current) {
+        setMicLog('⚠️ got result but shouldListen=false, ignoring');
+        return;
+      }
+
+      let finalText = '';
+      let currentInterim = '';
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalText += transcript;
+        } else {
+          currentInterim += transcript;
+        }
+      }
+
+      const activeText = (finalText || currentInterim).trim();
+      currentInterimRef.current = activeText;
+      setInterimText(activeText);
+      setMicLog(`📝 heard: "${activeText}"`);
+
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+
+      if (activeText.length > 2) {
+        silenceTimerRef.current = setTimeout(() => {
+          if (currentInterimRef.current && shouldListenRef.current && !isProcessing && !isSpeaking) {
+            const textToSend = currentInterimRef.current;
+            currentInterimRef.current = '';
+            setMicLog(`📤 sending: "${textToSend}"`);
+            processWithGroq(textToSend);
+          }
+        }, 1200);
+      }
+    };
+
+    recognition.onerror = (event) => {
+      clearStallTimer();
+      setMicLog(`❌ recognition error: ${event.error}`);
+      if (event.error === 'not-allowed' || event.error === 'audio-capture') {
+        isAllowedRef.current = false;
+        micEnabledRef.current = false;
+        setMicAllowed(false);
+        setLatestResponse('Microphone access denied. Click 🎙️ to allow.');
+      }
+    };
+
+    recognition.onend = () => {
+      clearStallTimer();
+      setIsListening(false);
+      setMicLog(prev => prev + ' → ended');
+
+      if (isAllowedRef.current && shouldListenRef.current) {
+        setTimeout(() => {
+          if (shouldListenRef.current) {
+            try {
+              startRecognitionSession();
+            } catch (e) {
+              setMicLog(`❌ restart failed: ${e.message}`);
+            }
+          }
+        }, 300);
+      }
+    };
+
+    try {
+      recognition.start();
+    } catch (e) {
+      setMicLog(`❌ recognition.start() threw: ${e.message}`);
+    }
+  };
 
   // Request Microphone Access manually via user click
   const requestMicAccess = async () => {
@@ -60,15 +183,7 @@ export default function Terminal({ onStatusChange }) {
       micEnabledRef.current = true;
       setLatestResponse('Microphone access granted.');
 
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.start();
-        } catch (e) {
-          setMicLog(`❌ recognition.start() threw: ${e.message}`);
-        }
-      } else {
-        setMicLog('❌ no recognition instance available (unsupported browser?)');
-      }
+      startRecognitionSession();
     } catch (e) {
       console.warn("Microphone access denied:", e);
       setMicLog(`❌ getUserMedia failed: ${e.name} - ${e.message}`);
@@ -325,9 +440,7 @@ export default function Terminal({ onStatusChange }) {
       setIsProcessing(false);
       if (micEnabledRef.current) {
         shouldListenRef.current = true;
-        try {
-          if (recognitionRef.current && isAllowedRef.current) recognitionRef.current.start();
-        } catch (e) {}
+        if (isAllowedRef.current) startRecognitionSession();
       }
       return;
     }
@@ -388,9 +501,7 @@ export default function Terminal({ onStatusChange }) {
       setIsProcessing(false);
       if (micEnabledRef.current) {
         shouldListenRef.current = true;
-        try {
-          if (recognitionRef.current && isAllowedRef.current) recognitionRef.current.start();
-        } catch (e) {}
+        if (isAllowedRef.current) startRecognitionSession();
       }
     }
   };
@@ -401,6 +512,10 @@ export default function Terminal({ onStatusChange }) {
     }
   };
 
+  // Just a support check + unmount cleanup now — actual recognition
+  // lifecycle is handled by startRecognitionSession() (see above), which
+  // creates a fresh instance every time rather than reusing one long-lived
+  // object across the whole session.
   useEffect(() => {
     if (!SpeechRecognition) {
       setLatestResponse('Speech recognition unsupported.');
@@ -408,121 +523,15 @@ export default function Terminal({ onStatusChange }) {
       return;
     }
 
-    const recognition = new SpeechRecognition();
-    // continuous:true is known to be unreliable on Android Chrome — it can
-    // report as "listening" indefinitely while silently never capturing
-    // any audio, with no error ever fired. Short single-shot sessions that
-    // auto-restart on end are the standard, more reliable workaround.
-    recognition.continuous = false;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
-    recognitionRef.current = recognition;
-
-    // Watchdog: if a session goes silent (no speech/result) for too long,
-    // force it to restart rather than staying stuck forever.
-    let stallTimer = null;
-    const clearStallTimer = () => {
-      if (stallTimer) clearTimeout(stallTimer);
-      stallTimer = null;
-    };
-    const armStallTimer = () => {
-      clearStallTimer();
-      stallTimer = setTimeout(() => {
-        setMicLog('⏱️ no audio detected for a while, restarting mic session...');
-        try { recognition.abort(); } catch (e) {}
-      }, 6000);
-    };
-
-    recognition.onstart = () => {
-      setIsListening(true);
-      isAllowedRef.current = true;
-      setMicAllowed(true);
-      setMicLog('🎙️ recognition started — listening...');
-      armStallTimer();
-    };
-
-    recognition.onspeechstart = () => {
-      setMicLog('🗣️ speech detected...');
-      clearStallTimer();
-    };
-
-    recognition.onresult = (event) => {
-      clearStallTimer();
-      if (!shouldListenRef.current) {
-        setMicLog('⚠️ got result but shouldListen=false, ignoring');
-        return;
-      }
-
-      let finalText = '';
-      let currentInterim = '';
-
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalText += transcript;
-        } else {
-          currentInterim += transcript;
-        }
-      }
-
-      const activeText = (finalText || currentInterim).trim();
-      currentInterimRef.current = activeText;
-      setInterimText(activeText);
-      setMicLog(`📝 heard: "${activeText}"`);
-
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-      
-      if (activeText.length > 2) {
-        silenceTimerRef.current = setTimeout(() => {
-          if (currentInterimRef.current && shouldListenRef.current && !isProcessing && !isSpeaking) {
-            const textToSend = currentInterimRef.current;
-            currentInterimRef.current = '';
-            setMicLog(`📤 sending: "${textToSend}"`);
-            processWithGroq(textToSend);
-          }
-        }, 1200);
-      }
-    };
-
-    recognition.onerror = (event) => {
-      clearStallTimer();
-      setMicLog(`❌ recognition error: ${event.error}`);
-      if (event.error === 'not-allowed' || event.error === 'audio-capture') {
-        isAllowedRef.current = false;
-        setMicAllowed(false);
-        setLatestResponse('Microphone access denied. Click 🎙️ to allow.');
-      }
-    };
-
-    recognition.onend = () => {
-      clearStallTimer();
-      setIsListening(false);
-      setMicLog(prev => prev + ' → ended');
-      
-      if (isAllowedRef.current && shouldListenRef.current) {
-        setTimeout(() => {
-          try {
-            if (shouldListenRef.current) recognition.start();
-          } catch (e) {
-            setMicLog(`❌ restart failed: ${e.message}`);
-          }
-        }, 300);
-      }
-    };
-
-    // NOTE: we deliberately do NOT auto-start recognition here on mount.
-    // Mobile browsers require SpeechRecognition.start() to happen as a
-    // direct result of a user gesture (like tapping the mic button).
-    // Auto-starting here without a gesture can silently create a broken
-    // "zombie" session that reports as listening but never captures audio.
-    // The mic button's requestMicAccess() is now the only place that
-    // starts recognition for the first time.
-
     return () => {
-      recognition.onend = null;
       clearStallTimer();
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-      try { recognition.abort(); } catch (e) {}
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.onend = null;
+          recognitionRef.current.abort();
+        } catch (e) {}
+      }
       window.speechSynthesis.cancel();
     };
   }, []);
