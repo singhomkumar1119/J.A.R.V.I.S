@@ -65,12 +65,18 @@ export default function Background3D() {
     scene.background = new THREE.Color(0x020813);
     scene.fog = new THREE.FogExp2(0x020813, 0.0018);
 
-    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 2000);
+    const getSize = () => ({
+      w: mount.clientWidth || window.innerWidth,
+      h: mount.clientHeight || window.innerHeight,
+    });
+    const initialSize = getSize();
+
+    const camera = new THREE.PerspectiveCamera(60, initialSize.w / initialSize.h, 1, 2000);
     camera.position.set(0, 0, 105);
     camera.lookAt(0, 0, 0);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setSize(initialSize.w, initialSize.h);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     mount.appendChild(renderer.domElement);
 
@@ -230,15 +236,22 @@ export default function Background3D() {
     animate();
 
     const handleResize = () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
+      const { w, h } = getSize();
+      camera.aspect = w / h;
       camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setSize(w, h);
     };
     window.addEventListener('resize', handleResize);
+    // ResizeObserver catches size changes that window 'resize' can miss,
+    // e.g. mobile browser address bar hiding/showing which changes 100vh
+    // live via CSS without always firing a window resize event.
+    const resizeObserver = new ResizeObserver(handleResize);
+    resizeObserver.observe(mount);
 
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener('resize', handleResize);
+      resizeObserver.disconnect();
       starGeo.dispose();
       starMat.dispose();
       glowTexture.dispose();
