@@ -145,6 +145,64 @@ export default function Terminal({ onStatusChange }) {
     });
   };
 
+  // Automatic greeting on load: "Good Morning/Afternoon/Evening, Sir.
+  // How can I help you, sir?" — spoken once, time-of-day aware.
+  useEffect(() => {
+    let spoken = false;
+
+    const buildGreeting = () => {
+      const hour = new Date().getHours();
+      let g = 'Good evening, sir.';
+      if (hour < 12) g = 'Good morning, sir.';
+      else if (hour < 17) g = 'Good afternoon, sir.';
+      return `${g} How can I help you, sir?`;
+    };
+
+    const attemptGreeting = () => {
+      if (spoken) return;
+      const text = buildGreeting();
+      setLatestResponse(text);
+
+      if (!('speechSynthesis' in window)) return;
+
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      const voices = voicesRef.current.length ? voicesRef.current : window.speechSynthesis.getVoices();
+      const jarvisVoice = voices.find(v =>
+        v.name.includes('Google UK English Male') ||
+        v.name.includes('Microsoft Mark') ||
+        (v.lang.includes('en-GB') && v.name.includes('Male'))
+      ) || voices[0];
+      if (jarvisVoice) utterance.voice = jarvisVoice;
+      utterance.pitch = 0.85;
+      utterance.rate = 1.05;
+
+      // Only mark as truly spoken once audio actually starts — some
+      // mobile browsers silently block speechSynthesis.speak() before
+      // any real user interaction, without throwing an error.
+      utterance.onstart = () => {
+        spoken = true;
+        document.removeEventListener('click', attemptGreeting);
+        document.removeEventListener('touchstart', attemptGreeting);
+      };
+
+      window.speechSynthesis.speak(utterance);
+    };
+
+    // Try right away (works on desktop and browsers that allow it)
+    const initialTimer = setTimeout(attemptGreeting, 900);
+
+    // Fallback: if autoplay was blocked, speak on the first real tap
+    document.addEventListener('click', attemptGreeting);
+    document.addEventListener('touchstart', attemptGreeting);
+
+    return () => {
+      clearTimeout(initialTimer);
+      document.removeEventListener('click', attemptGreeting);
+      document.removeEventListener('touchstart', attemptGreeting);
+    };
+  }, []);
+
   // Action executor for commands like "open whatsapp", "search ...", etc.
   // Ordered from most specific phrase to least specific, so "open google docs"
   // matches Docs before the generic "google" catch-all further down.
