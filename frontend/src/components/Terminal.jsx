@@ -129,7 +129,7 @@ export default function Terminal({ onStatusChange }) {
             setMicLog(`📤 sending: "${textToSend}"`);
             processWithGroq(textToSend);
           }
-        }, 1200);
+        }, 700);
       }
     };
 
@@ -344,7 +344,7 @@ export default function Terminal({ onStatusChange }) {
     };
 
     // Try right away (works on desktop and browsers that allow it)
-    const initialTimer = setTimeout(attemptGreeting, 900);
+    const initialTimer = setTimeout(attemptGreeting, 400);
 
     // Fallback: if autoplay was blocked, speak on the first real tap
     document.addEventListener('click', attemptGreeting);
@@ -471,9 +471,27 @@ export default function Terminal({ onStatusChange }) {
         { role: 'user', content: userText }
       ];
 
+      // Web search adds real round-trip latency (the model has to make a
+      // tool call before it can answer), which was making EVERY reply feel
+      // slow — including "hello" or "what's your name". Only pay that cost
+      // when the question actually needs current/live info; otherwise use
+      // the much faster plain model.
+      const needsLiveSearch = (text) => {
+        const t = text.toLowerCase();
+        const keywords = [
+          'today', 'now', 'current', 'currently', 'latest', 'news', 'weather',
+          'price', 'stock', 'score', 'forecast', 'temperature', 'live',
+          'recent', 'this week', 'this year', 'who won', 'who is the',
+          'when is', 'when did', 'release date', 'update', 'happening',
+          'right now',
+        ];
+        return keywords.some(k => t.includes(k));
+      };
+      const selectedModel = needsLiveSearch(userText) ? 'groq/compound-mini' : 'openai/gpt-oss-20b';
+
       const completion = await groq.chat.completions.create({
         messages: messages,
-        model: 'groq/compound-mini',
+        model: selectedModel,
         temperature: 0.6,
         max_tokens: 180,
       });
