@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Groq from 'groq-sdk';
 import './Terminal.css';
+import { logConversation } from '../logConversation';
 
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -127,7 +128,7 @@ export default function Terminal({ onStatusChange }) {
             const textToSend = currentInterimRef.current;
             currentInterimRef.current = '';
             setMicLog(`📤 sending: "${textToSend}"`);
-            processWithGroq(textToSend);
+            processWithGroq(textToSend, 'voice');
           }
         }, 700);
       }
@@ -423,7 +424,7 @@ export default function Terminal({ onStatusChange }) {
     return null;
   };
 
-  const processWithGroq = async (userText) => {
+  const processWithGroq = async (userText, source = 'typed') => {
     if (!userText || userText.trim().length === 0) return;
 
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
@@ -448,6 +449,7 @@ export default function Terminal({ onStatusChange }) {
         { role: 'assistant', text: actionResult }
       ]);
       setLatestResponse(actionResult);
+      logConversation({ userText, jarvisResponse: actionResult, source: 'action' });
       await speakResponse(actionResult);
       setIsProcessing(false);
       if (micEnabledRef.current) {
@@ -513,6 +515,7 @@ export default function Terminal({ onStatusChange }) {
         { role: 'assistant', text: jarvisResponse }
       ]);
       setLatestResponse(jarvisResponse);
+      logConversation({ userText, jarvisResponse, source });
       
       await speakResponse(jarvisResponse);
 

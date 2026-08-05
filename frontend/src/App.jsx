@@ -9,6 +9,7 @@ import LocationWidget from './components/LocationWidget.jsx';
 import SystemInfoWidget from './components/SystemInfoWidget.jsx';
 import ActivityMonitorWidget from './components/ActivityMonitorWidget.jsx';
 import GreetingWidget from './components/GreetingWidget.jsx';
+import AdminDashboard from './components/AdminDashboard.jsx';
 
 function App() {
   const [blobConfig, setBlobConfig] = useState({
@@ -30,6 +31,14 @@ function App() {
     h: typeof window !== 'undefined' ? window.innerHeight : 800
   });
 
+  const [route, setRoute] = useState(typeof window !== 'undefined' ? window.location.hash : '');
+
+  useEffect(() => {
+    const handleHashChange = () => setRoute(window.location.hash);
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
   useEffect(() => {
     const handleResize = () => {
       setScreen({ w: window.innerWidth, h: window.innerHeight });
@@ -43,6 +52,10 @@ function App() {
       localStorage.setItem('jarvis_blob_color', blobConfig.color);
     }
   }, [blobConfig.color]);
+
+  if (route === '#admin') {
+    return <AdminDashboard />;
+  }
 
   return (
     <div 
@@ -101,6 +114,21 @@ function App() {
       <DraggableWidget id="terminal" defaultPos={{ x: Math.max(20, screen.w / 2 - 425), y: screen.h - 90 }}>
         <Terminal onStatusChange={setJarvisStatus} />
       </DraggableWidget>
+
+      {/* Privacy notice — conversations are logged, visitors should know */}
+      <div style={{
+        position: 'fixed',
+        bottom: '4px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        fontSize: '10px',
+        color: 'rgba(143, 247, 255, 0.35)',
+        fontFamily: 'monospace',
+        zIndex: 5,
+        pointerEvents: 'none',
+      }}>
+        Conversations with J.A.R.V.I.S may be logged for improvement purposes.
+      </div>
     </div>
   );
 }
