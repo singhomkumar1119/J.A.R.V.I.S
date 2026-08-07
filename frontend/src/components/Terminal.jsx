@@ -634,7 +634,7 @@ export default function Terminal({ onStatusChange }) {
         <button 
           className={`jarvis-mic-btn ${micAllowed ? (isListening ? 'active' : '') : 'denied'}`}
           onClick={toggleMic}
-          title={micAllowed ? "Microphone Active (Click to re-authorize)" : "Click to Enable Microphone Access"}
+          title={isListening ? "Microphone on — tap to turn off" : "Tap to turn on microphone"}
         >
           {micAllowed ? '🎙️' : '🎙️❌'}
         </button>
