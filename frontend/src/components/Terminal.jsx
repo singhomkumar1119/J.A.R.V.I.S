@@ -3,16 +3,21 @@ import Groq from 'groq-sdk';
 import './Terminal.css';
 import { logConversation } from '../logConversation';
 
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-
 const groq = new Groq({
   apiKey: import.meta.env.VITE_GROQ_API_KEY,
   dangerouslyAllowBrowser: true 
 });
 
+// Tuning for the volume-based silence detector (replaces the old browser
+// SpeechRecognition silence handling). RMS is measured on a 0-128 scale
+// from time-domain audio data.
+const SILENCE_RMS_THRESHOLD = 10;
+const SILENCE_STOP_MS = 900;      // stop recording after this much silence following speech
+const NO_SPEECH_TIMEOUT_MS = 7000; // give up and restart if nothing is said at all
+const MAX_RECORDING_MS = 15000;    // hard safety cap per recording
+
 export default function Terminal({ onStatusChange }) {
   const [history, setHistory] = useState([]);
-  const [interimText, setInterimText] = useState('');
   const [inputText, setInputText] = useState('');
   const [latestResponse, setLatestResponse] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -22,8 +27,7 @@ export default function Terminal({ onStatusChange }) {
   const [commandCount, setCommandCount] = useState(0);
   const [debugError, setDebugError] = useState(null);
   const [micLog, setMicLog] = useState('Waiting for mic activity...');
-  
-  const recognitionRef = useRef(null);
+
   const isAllowedRef = useRef(true);
   const shouldListenRef = useRef(false);
   // Tracks the user's actual intent (mic toggled on/off), separate from
@@ -31,9 +35,19 @@ export default function Terminal({ onStatusChange }) {
   // JARVIS is speaking. This stops JARVIS's own replies from accidentally
   // flipping the mic back on after the user has explicitly turned it off.
   const micEnabledRef = useRef(false);
-  const silenceTimerRef = useRef(null);
-  const currentInterimRef = useRef('');
-  const stallTimerRef = useRef(null);
+
+  // --- Recording pipeline refs (MediaRecorder + Web Audio VAD) ---
+  const micStreamRef = useRef(null);
+  const audioContextRef = useRef(null);
+  const analyserRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const recordedChunksRef = useRef([]);
+  const vadRafRef = useRef(null);
+  const hasDetectedSpeechRef = useRef(false);
+  const silenceStartRef = useRef(null);
+  const recordingStartRef = useRef(null);
+  const shouldSendAfterStopRef = useRef(false);
+  const currentAudioRef = useRef(null);
 
   // Report status changes to parent
   useEffect(() => {
@@ -48,263 +62,283 @@ export default function Terminal({ onStatusChange }) {
     }
   }, [isListening, isProcessing, isSpeaking, micAllowed, commandCount, onStatusChange]);
 
-  // Builds and starts a completely FRESH SpeechRecognition instance every
-  // single time. Reusing the same instance across many start/stop cycles
-  // is a known cause of Android Chrome silently "listening" without ever
-  // actually capturing audio again — a fresh object each time avoids that
-  // corrupted-state bug entirely.
-  const clearStallTimer = () => {
-    if (stallTimerRef.current) clearTimeout(stallTimerRef.current);
-    stallTimerRef.current = null;
-  };
-
-  const startRecognitionSession = () => {
-    if (!SpeechRecognition) return;
-
-    // Tear down any previous instance cleanly first.
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.onend = null;
-        recognitionRef.current.abort();
-      } catch (e) {}
+  const stopMediaTracks = () => {
+    if (vadRafRef.current) {
+      cancelAnimationFrame(vadRafRef.current);
+      vadRafRef.current = null;
     }
-
-    const recognition = new SpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
-    recognitionRef.current = recognition;
-
-    const armStallTimer = () => {
-      clearStallTimer();
-      stallTimerRef.current = setTimeout(() => {
-        setMicLog('⏱️ no audio detected for a while, restarting mic session...');
-        try { recognition.abort(); } catch (e) {}
-      }, 6000);
-    };
-
-    recognition.onstart = () => {
-      setIsListening(true);
-      isAllowedRef.current = true;
-      setMicAllowed(true);
-      setMicLog('🎙️ recognition started — listening (fresh session)...');
-      armStallTimer();
-    };
-
-    recognition.onspeechstart = () => {
-      setMicLog('🗣️ speech detected...');
-      clearStallTimer();
-    };
-
-    recognition.onresult = (event) => {
-      clearStallTimer();
-      if (!shouldListenRef.current) {
-        setMicLog('⚠️ got result but shouldListen=false, ignoring');
-        return;
-      }
-
-      let finalText = '';
-      let currentInterim = '';
-
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalText += transcript;
-        } else {
-          currentInterim += transcript;
-        }
-      }
-
-      const activeText = (finalText || currentInterim).trim();
-      currentInterimRef.current = activeText;
-      setInterimText(activeText);
-      setMicLog(`📝 heard: "${activeText}"`);
-
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-
-      if (activeText.length > 2) {
-        silenceTimerRef.current = setTimeout(() => {
-          if (currentInterimRef.current && shouldListenRef.current && !isProcessing && !isSpeaking) {
-            const textToSend = currentInterimRef.current;
-            currentInterimRef.current = '';
-            setMicLog(`📤 sending: "${textToSend}"`);
-            processWithGroq(textToSend, 'voice');
-          }
-        }, 700);
-      }
-    };
-
-    recognition.onerror = (event) => {
-      clearStallTimer();
-      setMicLog(`❌ recognition error: ${event.error}`);
-      if (event.error === 'not-allowed' || event.error === 'audio-capture') {
-        isAllowedRef.current = false;
-        micEnabledRef.current = false;
-        setMicAllowed(false);
-        setLatestResponse('Microphone access denied. Click 🎙️ to allow.');
-      }
-    };
-
-    recognition.onend = () => {
-      clearStallTimer();
-      setMicLog(prev => prev + ' → ended');
-
-      const willRestart = isAllowedRef.current && shouldListenRef.current;
-
-      // Only show "not listening" in the UI if we're actually stopping —
-      // if we're about to auto-restart a fresh session (the normal case
-      // whenever there's a pause in speech), keep the mic button looking
-      // active the whole time instead of flickering off and on.
-      if (!willRestart) {
-        setIsListening(false);
-      }
-
-      if (willRestart) {
-        setTimeout(() => {
-          if (shouldListenRef.current) {
-            try {
-              startRecognitionSession();
-            } catch (e) {
-              setMicLog(`❌ restart failed: ${e.message}`);
-              setIsListening(false);
-            }
-          } else {
-            setIsListening(false);
-          }
-        }, 300);
-      }
-    };
-
-    try {
-      recognition.start();
-    } catch (e) {
-      setMicLog(`❌ recognition.start() threw: ${e.message}`);
+    if (micStreamRef.current) {
+      micStreamRef.current.getTracks().forEach(t => t.stop());
+      micStreamRef.current = null;
+    }
+    if (audioContextRef.current) {
+      try { audioContextRef.current.close(); } catch (e) {}
+      audioContextRef.current = null;
     }
   };
 
-  // Request Microphone Access manually via user click
-  const requestMicAccess = async () => {
-    setMicLog('🔑 requesting mic permission...');
+  // Stops the current recording session immediately without sending
+  // anything for transcription and without auto-restarting. Used when
+  // JARVIS starts speaking, when the user turns the mic off, or on unmount.
+  const haltRecording = () => {
+    shouldSendAfterStopRef.current = false;
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try { mediaRecorderRef.current.stop(); } catch (e) {}
+    }
+    stopMediaTracks();
+  };
+
+  // Plays a Blob of audio, with a fallback for mobile browsers that block
+  // autoplay until a real user gesture: if .play() is rejected, it waits
+  // for the next tap/click anywhere on the page and retries on the same
+  // already-loaded audio element (no re-fetch needed).
+  const playAudioBlob = (blob) => {
+    return new Promise((resolve) => {
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      currentAudioRef.current = audio;
+      let settled = false;
+
+      const cleanup = () => {
+        if (settled) return;
+        settled = true;
+        URL.revokeObjectURL(url);
+        document.removeEventListener('click', retryPlay);
+        document.removeEventListener('touchstart', retryPlay);
+        clearTimeout(safetyTimer);
+        resolve();
+      };
+
+      const retryPlay = () => {
+        audio.play().catch(() => {});
+      };
+
+      audio.onended = cleanup;
+      audio.onerror = cleanup;
+
+      audio.play().then(() => {
+        document.removeEventListener('click', retryPlay);
+        document.removeEventListener('touchstart', retryPlay);
+      }).catch(() => {
+        document.addEventListener('click', retryPlay);
+        document.addEventListener('touchstart', retryPlay);
+      });
+
+      const safetyTimer = setTimeout(cleanup, 20000);
+    });
+  };
+
+  // Sends text to Groq's Orpheus TTS and plays the result. Replaces the
+  // old browser speechSynthesis, which sounded robotic and had inconsistent
+  // mobile behavior.
+  const speakResponse = async (text) => {
+    setIsSpeaking(true);
+    shouldListenRef.current = false;
+    haltRecording();
+
     try {
+      const response = await groq.audio.speech.create({
+        model: 'canopylabs/orpheus-v1-english',
+        voice: 'daniel',
+        input: text,
+        response_format: 'mp3',
+      });
+      const blob = await response.blob();
+      await playAudioBlob(blob);
+    } catch (err) {
+      console.error('Orpheus TTS error:', err);
+      setMicLog(`❌ TTS error: ${err.message}`);
+    } finally {
+      setIsSpeaking(false);
+      // Only resume listening if the user actually had the mic on —
+      // otherwise JARVIS speaking a typed-chat reply would silently
+      // flip the mic back on even after the user turned it off.
+      shouldListenRef.current = micEnabledRef.current;
+    }
+  };
+
+  // Sends a recorded audio Blob to Groq Whisper for transcription, then
+  // feeds the result into the normal chat pipeline.
+  const transcribeAndSend = async (blob, mimeType) => {
+    setMicLog('📤 transcribing...');
+    try {
+      const ext = mimeType.includes('mp4') ? 'm4a' : 'webm';
+      const file = new File([blob], `speech.${ext}`, { type: mimeType });
+      const transcription = await groq.audio.transcriptions.create({
+        file,
+        model: 'whisper-large-v3-turbo',
+        language: 'en',
+      });
+      const text = (transcription.text || '').trim();
+      if (text.length > 1) {
+        setMicLog(`📝 heard: "${text}"`);
+        processWithGroq(text, 'voice');
+      } else {
+        setMicLog('⚠️ empty transcript, restarting mic...');
+        restartIfEnabled();
+      }
+    } catch (err) {
+      console.error('Whisper transcription error:', err);
+      setMicLog(`❌ transcription failed: ${err.message}`);
+      restartIfEnabled();
+    }
+  };
+
+  const restartIfEnabled = () => {
+    if (micEnabledRef.current && shouldListenRef.current) {
+      setTimeout(() => startRecordingSession(), 250);
+    } else {
+      setIsListening(false);
+    }
+  };
+
+  const handleRecordingStopped = (mimeType) => {
+    const shouldSend = shouldSendAfterStopRef.current;
+    const chunks = recordedChunksRef.current;
+    recordedChunksRef.current = [];
+
+    if (!shouldSend) {
+      restartIfEnabled();
+      return;
+    }
+    if (chunks.length === 0) {
+      setMicLog('⚠️ no audio captured, restarting mic...');
+      restartIfEnabled();
+      return;
+    }
+    const blob = new Blob(chunks, { type: mimeType });
+    transcribeAndSend(blob, mimeType);
+  };
+
+  // Builds and starts a completely fresh recording session: gets a mic
+  // stream, runs a lightweight volume-based voice-activity detector to
+  // know when to stop, and records via MediaRecorder. This replaces the
+  // old browser SpeechRecognition entirely — recording raw audio is far
+  // more reliable across Android devices than the built-in recognition
+  // engine, which could silently "listen" without ever capturing anything.
+  const startRecordingSession = async () => {
+    try {
+      setMicLog('🔑 requesting mic permission...');
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach(track => track.stop());
-      setMicLog('✅ mic permission granted, starting recognition...');
-
+      micStreamRef.current = stream;
       isAllowedRef.current = true;
       setMicAllowed(true);
-      shouldListenRef.current = true;
-      micEnabledRef.current = true;
-      setLatestResponse('Microphone access granted.');
+      setIsListening(true);
+      setMicLog('🎙️ recording — listening...');
 
-      startRecognitionSession();
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      const audioCtx = new AudioContextClass();
+      audioContextRef.current = audioCtx;
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 512;
+      source.connect(analyser);
+      analyserRef.current = analyser;
+      const dataArray = new Uint8Array(analyser.fftSize);
+
+      recordedChunksRef.current = [];
+      hasDetectedSpeechRef.current = false;
+      silenceStartRef.current = null;
+      recordingStartRef.current = Date.now();
+      shouldSendAfterStopRef.current = false;
+
+      let mimeType = 'audio/webm;codecs=opus';
+      if (!window.MediaRecorder || !MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'audio/webm';
+      }
+      if (!window.MediaRecorder || !MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = '';
+      }
+      const recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) recordedChunksRef.current.push(e.data);
+      };
+      recorder.onstop = () => {
+        handleRecordingStopped(mimeType || recorder.mimeType || 'audio/webm');
+      };
+      recorder.start();
+
+      const checkLevel = () => {
+        if (!analyserRef.current) return;
+        analyserRef.current.getByteTimeDomainData(dataArray);
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          const dev = dataArray[i] - 128;
+          sum += dev * dev;
+        }
+        const rms = Math.sqrt(sum / dataArray.length);
+        const now = Date.now();
+        const elapsed = now - recordingStartRef.current;
+
+        if (rms > SILENCE_RMS_THRESHOLD) {
+          if (!hasDetectedSpeechRef.current) {
+            hasDetectedSpeechRef.current = true;
+            setMicLog('🗣️ speech detected...');
+          }
+          silenceStartRef.current = null;
+        } else if (hasDetectedSpeechRef.current) {
+          if (silenceStartRef.current === null) {
+            silenceStartRef.current = now;
+          } else if (now - silenceStartRef.current > SILENCE_STOP_MS) {
+            shouldSendAfterStopRef.current = true;
+            try { mediaRecorderRef.current.stop(); } catch (e) {}
+            stopMediaTracks();
+            return;
+          }
+        }
+
+        if (!hasDetectedSpeechRef.current && elapsed > NO_SPEECH_TIMEOUT_MS) {
+          setMicLog('⏱️ no speech detected, restarting mic...');
+          shouldSendAfterStopRef.current = false;
+          try { mediaRecorderRef.current.stop(); } catch (e) {}
+          stopMediaTracks();
+          return;
+        }
+
+        if (elapsed > MAX_RECORDING_MS) {
+          shouldSendAfterStopRef.current = true;
+          try { mediaRecorderRef.current.stop(); } catch (e) {}
+          stopMediaTracks();
+          return;
+        }
+
+        vadRafRef.current = requestAnimationFrame(checkLevel);
+      };
+      vadRafRef.current = requestAnimationFrame(checkLevel);
+
     } catch (e) {
-      console.warn("Microphone access denied:", e);
+      console.warn('Microphone access error:', e);
       setMicLog(`❌ getUserMedia failed: ${e.name} - ${e.message}`);
       isAllowedRef.current = false;
       micEnabledRef.current = false;
       setMicAllowed(false);
+      setIsListening(false);
       setLatestResponse('Microphone access denied. Click mic button to enable.');
     }
   };
 
-  // Mic button now properly toggles: tap once to turn on, tap again to
-  // turn off. Previously it only ever tried to (re)start, so there was
-  // no way to switch it off from the UI.
+  // Mic button toggles: tap once to turn on, tap again to turn off.
   const toggleMic = () => {
-    if (isListening) {
+    if (micEnabledRef.current) {
       shouldListenRef.current = false;
       micEnabledRef.current = false;
       setIsListening(false);
       setMicLog('🔇 microphone turned off');
-      if (recognitionRef.current) {
-        try { recognitionRef.current.abort(); } catch (e) {}
-      }
+      haltRecording();
       return;
     }
-    requestMicAccess();
+    shouldListenRef.current = true;
+    micEnabledRef.current = true;
+    startRecordingSession();
   };
 
-  // Pre-fetch voices (voices load asynchronously on many mobile browsers)
-  const voicesRef = useRef([]);
+  // Automatic greeting on load: "Good Morning/Afternoon/Evening, Om.
+  // How can I help you?" — spoken once via Orpheus, time-of-day aware.
   useEffect(() => {
-    if ('speechSynthesis' in window) {
-      const loadVoices = () => {
-        voicesRef.current = window.speechSynthesis.getVoices();
-      };
-      loadVoices();
-      window.speechSynthesis.onvoiceschanged = loadVoices;
-    }
-  }, []);
-
-  const speakResponse = (text) => {
-    return new Promise((resolve) => {
-      if (!('speechSynthesis' in window)) {
-        console.warn('speechSynthesis not supported on this browser');
-        resolve();
-        return;
-      }
-
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-
-      const voices = voicesRef.current.length ? voicesRef.current : window.speechSynthesis.getVoices();
-      const jarvisVoice = voices.find(v => 
-        v.name.includes('Google UK English Male') || 
-        v.name.includes('Microsoft Mark') || 
-        (v.lang.includes('en-GB') && v.name.includes('Male'))
-      ) || voices[0];
-      
-      if (jarvisVoice) {
-        utterance.voice = jarvisVoice;
-      }
-      
-      utterance.pitch = 0.85;
-      utterance.rate = 1.05;
-
-      let settled = false;
-      const finish = () => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(safetyTimer);
-        setIsSpeaking(false);
-        // Only resume listening if the user actually had the mic on —
-        // otherwise JARVIS speaking a typed-chat reply would silently
-        // flip the mic back on even after the user turned it off.
-        shouldListenRef.current = micEnabledRef.current;
-        resolve();
-      };
-
-      // Safety net: some mobile browsers silently hang and never fire
-      // onstart/onend/onerror, which would freeze the app forever.
-      const safetyTimer = setTimeout(() => {
-        console.warn('speechSynthesis timed out — forcing resume');
-        finish();
-      }, 8000);
-
-      utterance.onstart = () => {
-        setIsSpeaking(true);
-        shouldListenRef.current = false;
-        if (recognitionRef.current) {
-          try { recognitionRef.current.abort(); } catch (e) {}
-        }
-      };
-      
-      utterance.onend = finish;
-      
-      utterance.onerror = (e) => {
-        console.error('speechSynthesis error:', e.error);
-        finish();
-      };
-
-      window.speechSynthesis.speak(utterance);
-    });
-  };
-
-  // Automatic greeting on load: "Good Morning/Afternoon/Evening, Sir.
-  // How can I help you, sir?" — spoken once, time-of-day aware.
-  useEffect(() => {
-    let spoken = false;
-
     const buildGreeting = () => {
       const hour = new Date().getHours();
       let g = 'Good evening, Om.';
@@ -313,49 +347,14 @@ export default function Terminal({ onStatusChange }) {
       return `${g} How can I help you?`;
     };
 
-    const attemptGreeting = () => {
-      if (spoken) return;
+    const timer = setTimeout(() => {
       const text = buildGreeting();
       setLatestResponse(text);
+      speakResponse(text);
+    }, 400);
 
-      if (!('speechSynthesis' in window)) return;
-
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      const voices = voicesRef.current.length ? voicesRef.current : window.speechSynthesis.getVoices();
-      const jarvisVoice = voices.find(v =>
-        v.name.includes('Google UK English Male') ||
-        v.name.includes('Microsoft Mark') ||
-        (v.lang.includes('en-GB') && v.name.includes('Male'))
-      ) || voices[0];
-      if (jarvisVoice) utterance.voice = jarvisVoice;
-      utterance.pitch = 0.85;
-      utterance.rate = 1.05;
-
-      // Only mark as truly spoken once audio actually starts — some
-      // mobile browsers silently block speechSynthesis.speak() before
-      // any real user interaction, without throwing an error.
-      utterance.onstart = () => {
-        spoken = true;
-        document.removeEventListener('click', attemptGreeting);
-        document.removeEventListener('touchstart', attemptGreeting);
-      };
-
-      window.speechSynthesis.speak(utterance);
-    };
-
-    // Try right away (works on desktop and browsers that allow it)
-    const initialTimer = setTimeout(attemptGreeting, 400);
-
-    // Fallback: if autoplay was blocked, speak on the first real tap
-    document.addEventListener('click', attemptGreeting);
-    document.addEventListener('touchstart', attemptGreeting);
-
-    return () => {
-      clearTimeout(initialTimer);
-      document.removeEventListener('click', attemptGreeting);
-      document.removeEventListener('touchstart', attemptGreeting);
-    };
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Action executor for commands like "open whatsapp", "search ...", etc.
@@ -427,19 +426,13 @@ export default function Terminal({ onStatusChange }) {
   const processWithGroq = async (userText, source = 'typed') => {
     if (!userText || userText.trim().length === 0) return;
 
-    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-    currentInterimRef.current = '';
-    setInterimText('');
     setInputText('');
-
     setIsProcessing(true);
     setLatestResponse('');
     setDebugError(null);
     setCommandCount(prev => prev + 1);
     shouldListenRef.current = false;
-    if (recognitionRef.current) {
-      try { recognitionRef.current.abort(); } catch (e) {}
-    }
+    haltRecording();
 
     // Check for local instant action commands first
     const actionResult = executeLocalAction(userText);
@@ -454,7 +447,7 @@ export default function Terminal({ onStatusChange }) {
       setIsProcessing(false);
       if (micEnabledRef.current) {
         shouldListenRef.current = true;
-        if (isAllowedRef.current) startRecognitionSession();
+        if (isAllowedRef.current) startRecordingSession();
       }
       return;
     }
@@ -491,12 +484,33 @@ export default function Terminal({ onStatusChange }) {
       };
       const selectedModel = needsLiveSearch(userText) ? 'groq/compound-mini' : 'openai/gpt-oss-20b';
 
-      const completion = await groq.chat.completions.create({
-        messages: messages,
-        model: selectedModel,
-        temperature: 0.6,
-        max_tokens: 180,
-      });
+      let completion;
+      try {
+        completion = await groq.chat.completions.create({
+          messages: messages,
+          model: selectedModel,
+          temperature: 0.6,
+          max_tokens: 180,
+        });
+      } catch (primaryErr) {
+        // groq/compound-mini depends on components Groq is in the process
+        // of deprecating, and can fail intermittently before its official
+        // shutdown date. Rather than showing an error for what's often a
+        // normal question, gracefully fall back to the plain fast model —
+        // it just won't have live web results for this one reply.
+        if (selectedModel === 'groq/compound-mini') {
+          console.warn('compound-mini failed, falling back to plain model:', primaryErr);
+          setMicLog('⚠️ search model unavailable, using fallback...');
+          completion = await groq.chat.completions.create({
+            messages: messages,
+            model: 'openai/gpt-oss-20b',
+            temperature: 0.6,
+            max_tokens: 180,
+          });
+        } else {
+          throw primaryErr;
+        }
+      }
 
       const jarvisResponse = completion.choices[0]?.message?.content || "I couldn't process that, Om.";
 
@@ -534,7 +548,7 @@ export default function Terminal({ onStatusChange }) {
       setIsProcessing(false);
       if (micEnabledRef.current) {
         shouldListenRef.current = true;
-        if (isAllowedRef.current) startRecognitionSession();
+        if (isAllowedRef.current) startRecordingSession();
       }
     }
   };
@@ -545,33 +559,25 @@ export default function Terminal({ onStatusChange }) {
     }
   };
 
-  // Just a support check + unmount cleanup now — actual recognition
-  // lifecycle is handled by startRecognitionSession() (see above), which
-  // creates a fresh instance every time rather than reusing one long-lived
-  // object across the whole session.
+  // Unmount cleanup only — recording lifecycle is fully handled by
+  // startRecordingSession()/haltRecording() above.
   useEffect(() => {
-    if (!SpeechRecognition) {
-      setLatestResponse('Speech recognition unsupported.');
+    if (!navigator.mediaDevices || !window.MediaRecorder) {
+      setLatestResponse('Voice input unsupported on this browser.');
       setMicAllowed(false);
-      return;
     }
 
     return () => {
-      clearStallTimer();
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.onend = null;
-          recognitionRef.current.abort();
-        } catch (e) {}
+      haltRecording();
+      if (currentAudioRef.current) {
+        try { currentAudioRef.current.pause(); } catch (e) {}
       }
-      window.speechSynthesis.cancel();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const getPlaceholderText = () => {
     if (!micAllowed) return "mic access denied — type command here & press enter...";
-    if (interimText) return interimText.toLowerCase();
     if (isProcessing) return "analyzing request...";
     if (latestResponse) return latestResponse.toLowerCase();
     if (isListening) return "type a command or speak into mic...";
