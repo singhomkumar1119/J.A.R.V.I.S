@@ -128,6 +128,16 @@ export default function Terminal({ onStatusChange }) {
     });
   };
 
+  // Orpheus's input is capped at 200 characters (hard API limit) —
+  // truncate on a word boundary so longer replies still get spoken
+  // instead of silently failing the TTS call.
+  const truncateForSpeech = (text, maxLen = 200) => {
+    if (text.length <= maxLen) return text;
+    const cut = text.slice(0, maxLen - 1);
+    const lastSpace = cut.lastIndexOf(' ');
+    return (lastSpace > 0 ? cut.slice(0, lastSpace) : cut) + '…';
+  };
+
   // Sends text to Groq's Orpheus TTS and plays the result. Replaces the
   // old browser speechSynthesis, which sounded robotic and had inconsistent
   // mobile behavior.
@@ -140,8 +150,10 @@ export default function Terminal({ onStatusChange }) {
       const response = await groq.audio.speech.create({
         model: 'canopylabs/orpheus-v1-english',
         voice: 'daniel',
-        input: text,
-        response_format: 'mp3',
+        input: truncateForSpeech(text),
+        // Orpheus only supports "wav" — "mp3" isn't a valid response_format
+        // for this endpoint and made every single TTS call fail.
+        response_format: 'wav',
       });
       const blob = await response.blob();
       await playAudioBlob(blob);
