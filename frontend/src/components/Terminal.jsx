@@ -510,70 +510,26 @@ export default function Terminal({ onStatusChange }) {
       const messages = [
         { 
           role: 'system', 
-          content: `You are J.A.R.V.I.S., a highly advanced AI assistant serving a user named Om. Address him as "Om" (not "sir") when it feels natural. Have a warm, personable tone — genuinely engaged and a little witty, like a trusted companion, not a flat robotic assistant — while staying brief. Today's real date is ${dateString}, current time ${timeString}. Always treat this as the true current date, not any date you might otherwise assume from training. Use web search whenever a question depends on current, live, recent, or specific factual information (news, weather, prices, sports scores, people, places, releases, events, general knowledge, etc.) — always prefer the latest available information over older knowledge, and default to the newest/most recent facts unless the user asks about the past specifically. Keep your answers brief, clear, and direct, suitable for speech synthesis. Do not use markdown or emojis.` 
+          content: `You are J.A.R.V.I.S., a highly advanced AI assistant serving a user named Om. Address him as "Om" (not "sir") when it feels natural. Have a warm, personable tone — genuinely engaged and a little witty, like a trusted companion, not a flat robotic assistant — while staying brief. If asked who built, made, or created you, answer clearly and proudly that you were built by Om — don't be vague or evasive about it. Today's real date is ${dateString}, current time ${timeString}. Always treat this as the true current date, not any date you might otherwise assume from training. Answer general knowledge questions directly from what you know. If asked about something very recent that you genuinely can't know (breaking news, live scores, this week's events), say honestly that you don't have live information on that rather than guessing. Keep your answers brief, clear, and direct, suitable for speech synthesis. Do not use markdown or emojis.` 
         },
         ...history.slice(-6).map(msg => ({ role: msg.role, content: msg.text })),
         { role: 'user', content: userText }
       ];
 
-      // Web search adds real round-trip latency (the model has to make a
-      // tool call before it can answer), which was making EVERY reply feel
-      // slow — including "hello" or "what's your name". Only pay that cost
-      // when the question actually needs current/live info; otherwise use
-      // the much faster plain model.
-      const needsLiveSearch = (text) => {
-        const t = text.toLowerCase();
-        const keywords = [
-          'today', 'now', 'current', 'currently', 'latest', 'news', 'weather',
-          'price', 'stock', 'score', 'forecast', 'temperature', 'live',
-          'recent', 'this week', 'this year', 'who won', 'who is the',
-          'when is', 'when did', 'release date', 'update', 'happening',
-          'right now',
-        ];
-        return keywords.some(k => t.includes(k));
-      };
-      const selectedModel = needsLiveSearch(userText) ? 'groq/compound-mini' : 'openai/gpt-oss-20b';
-
-      let completion;
-      try {
-        completion = await groq.chat.completions.create({
-          messages: messages,
-          model: selectedModel,
-          temperature: 0.6,
-          max_tokens: 180,
-        });
-      } catch (primaryErr) {
-        // groq/compound-mini depends on components Groq is in the process
-        // of deprecating, and can fail intermittently before its official
-        // shutdown date. Rather than showing an error for what's often a
-        // normal question, gracefully fall back to the plain fast model —
-        // it just won't have live web results for this one reply.
-        if (selectedModel === 'groq/compound-mini') {
-          console.warn('compound-mini failed, falling back to plain model:', primaryErr);
-          setMicLog('⚠️ search model unavailable, using fallback...');
-          completion = await groq.chat.completions.create({
-            messages: messages,
-            model: 'openai/gpt-oss-20b',
-            temperature: 0.6,
-            max_tokens: 180,
-          });
-        } else {
-          throw primaryErr;
-        }
-      }
+      // Previously routed some questions to groq/compound-mini for live web
+      // search, but that model depends on components Groq is in the
+      // process of deprecating and was failing consistently — even with a
+      // fallback in place. Simplified to always use the reliable plain
+      // model instead; it just won't have live web results.
+      const completion = await groq.chat.completions.create({
+        messages: messages,
+        model: 'openai/gpt-oss-20b',
+        temperature: 0.6,
+        max_tokens: 180,
+      });
 
       const jarvisResponse = completion.choices[0]?.message?.content || "I couldn't process that, Om.";
 
-      // Surface which web sources (if any) were used, for transparency —
-      // shown in the UI only, never read aloud by TTS.
-      const searchResults = completion.choices[0]?.message?.executed_tools?.[0]?.search_results;
-      if (searchResults && searchResults.length > 0) {
-        const sourceNames = searchResults.slice(0, 3).map(r => r.title || r.url).filter(Boolean);
-        if (sourceNames.length > 0) {
-          setMicLog(`🌐 sources: ${sourceNames.join(' | ')}`);
-        }
-      }
-      
       setHistory(prev => [...prev, 
         { role: 'user', text: userText },
         { role: 'assistant', text: jarvisResponse }
