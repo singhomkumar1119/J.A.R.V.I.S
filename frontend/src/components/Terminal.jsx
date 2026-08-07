@@ -128,14 +128,51 @@ export default function Terminal({ onStatusChange }) {
     });
   };
 
-  // Orpheus's input is capped at 200 characters (hard API limit) —
-  // truncate on a word boundary so longer replies still get spoken
-  // instead of silently failing the TTS call.
-  const truncateForSpeech = (text, maxLen = 200) => {
-    if (text.length <= maxLen) return text;
-    const cut = text.slice(0, maxLen - 1);
-    const lastSpace = cut.lastIndexOf(' ');
-    return (lastSpace > 0 ? cut.slice(0, lastSpace) : cut) + '…';
+  // Orpheus rejects input over 200 characters, so long replies need to be
+  // split into chunks and spoken back-to-back. Splits on sentence
+  // boundaries where possible so each chunk still sounds natural, falling
+  // back to splitting on spaces if a single sentence is itself too long.
+  const chunkTextForTTS = (text, maxLen = 180) => {
+    const sentences = text.match(/[^.!?]+[.!?]+(\s|$)|[^.!?]+$/g) || [text];
+    const chunks = [];
+    let current = '';
+
+    for (let sentence of sentences) {
+      sentence = sentence.trim();
+      if (!sentence) continue;
+
+      if (sentence.length > maxLen) {
+        // A single sentence is itself too long — hard-split on words.
+        const words = sentence.split(' ');
+        let piece = '';
+        for (const word of words) {
+          if ((piece + ' ' + word).trim().length > maxLen) {
+            if (piece) chunks.push(piece.trim());
+            piece = word;
+          } else {
+            piece = (piece + ' ' + word).trim();
+          }
+        }
+        if (piece) {
+          if ((current + ' ' + piece).trim().length <= maxLen) {
+            current = (current + ' ' + piece).trim();
+          } else {
+            if (current) chunks.push(current);
+            current = piece;
+          }
+        }
+        continue;
+      }
+
+      if ((current + ' ' + sentence).trim().length <= maxLen) {
+        current = (current + ' ' + sentence).trim();
+      } else {
+        if (current) chunks.push(current);
+        current = sentence;
+      }
+    }
+    if (current) chunks.push(current);
+    return chunks.length > 0 ? chunks : [text.slice(0, maxLen)];
   };
 
   // Sends text to Groq's Orpheus TTS and plays the result. Replaces the
@@ -147,16 +184,17 @@ export default function Terminal({ onStatusChange }) {
     haltRecording();
 
     try {
-      const response = await groq.audio.speech.create({
-        model: 'canopylabs/orpheus-v1-english',
-        voice: 'daniel',
-        input: truncateForSpeech(text),
-        // Orpheus only supports "wav" — "mp3" isn't a valid response_format
-        // for this endpoint and made every single TTS call fail.
-        response_format: 'wav',
-      });
-      const blob = await response.blob();
-      await playAudioBlob(blob);
+      const chunks = chunkTextForTTS(text);
+      for (const chunk of chunks) {
+        const response = await groq.audio.speech.create({
+          model: 'canopylabs/orpheus-v1-english',
+          voice: 'daniel',
+          input: chunk,
+          response_format: 'wav',
+        });
+        const blob = await response.blob();
+        await playAudioBlob(blob);
+      }
     } catch (err) {
       console.error('Orpheus TTS error:', err);
       setMicLog(`❌ TTS error: ${err.message}`);
@@ -472,7 +510,7 @@ export default function Terminal({ onStatusChange }) {
       const messages = [
         { 
           role: 'system', 
-          content: `You are J.A.R.V.I.S., a highly advanced AI assistant serving a user named Om. Address him as "Om" (not "sir") when it feels natural. Today's real date is ${dateString}, current time ${timeString}. Always treat this as the true current date, not any date you might otherwise assume from training. Use web search whenever a question depends on current, live, recent, or specific factual information (news, weather, prices, sports scores, people, places, releases, events, general knowledge, etc.) — always prefer the latest available information over older knowledge, and default to the newest/most recent facts unless the user asks about the past specifically. Keep your answers brief, clear, and direct, suitable for speech synthesis. Do not use markdown or emojis.` 
+          content: `You are J.A.R.V.I.S., a highly advanced AI assistant serving a user named Om. Address him as "Om" (not "sir") when it feels natural. Have a warm, personable tone — genuinely engaged and a little witty, like a trusted companion, not a flat robotic assistant — while staying brief. Today's real date is ${dateString}, current time ${timeString}. Always treat this as the true current date, not any date you might otherwise assume from training. Use web search whenever a question depends on current, live, recent, or specific factual information (news, weather, prices, sports scores, people, places, releases, events, general knowledge, etc.) — always prefer the latest available information over older knowledge, and default to the newest/most recent facts unless the user asks about the past specifically. Keep your answers brief, clear, and direct, suitable for speech synthesis. Do not use markdown or emojis.` 
         },
         ...history.slice(-6).map(msg => ({ role: msg.role, content: msg.text })),
         { role: 'user', content: userText }
