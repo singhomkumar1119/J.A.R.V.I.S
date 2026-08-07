@@ -510,23 +510,48 @@ export default function Terminal({ onStatusChange }) {
       const messages = [
         { 
           role: 'system', 
-          content: `You are J.A.R.V.I.S., a highly advanced AI assistant serving a user named Om. Address him as "Om" (not "sir") when it feels natural. Have a warm, personable tone — genuinely engaged and a little witty, like a trusted companion, not a flat robotic assistant — while staying brief. If asked who built, made, or created you, answer clearly and proudly that you were built by Om — don't be vague or evasive about it. Today's real date is ${dateString}, current time ${timeString}. Always treat this as the true current date, not any date you might otherwise assume from training. Answer general knowledge questions directly from what you know. If asked about something very recent that you genuinely can't know (breaking news, live scores, this week's events), say honestly that you don't have live information on that rather than guessing. Keep your answers brief, clear, and direct, suitable for speech synthesis. Do not use markdown or emojis.` 
+          content: `You are J.A.R.V.I.S., a highly advanced AI assistant serving a user named Om. Address him as "Om" (not "sir") when it feels natural. Have a warm, personable tone — genuinely engaged and a little witty, like a trusted companion, not a flat robotic assistant — while staying brief. Think a little before answering: for open-ended or interesting questions, don't just give the bare fact — briefly share a related thought, angle, or idea that adds value, like a sharp friend would. If asked who built, made, or created you, answer clearly and proudly that you were built by Om — don't be vague or evasive about it. Today's real date is ${dateString}, current time ${timeString}. Always treat this as the true current date, not any date you might otherwise assume from training. Use web search whenever a question depends on current, live, recent, or specific factual information (news, weather, prices, sports scores, people, places, releases, events, etc.) — prefer the latest available information over older knowledge. Keep your answers brief, clear, and direct, suitable for speech synthesis. Do not use markdown or emojis.` 
         },
         ...history.slice(-6).map(msg => ({ role: msg.role, content: msg.text })),
         { role: 'user', content: userText }
       ];
 
-      // Previously routed some questions to groq/compound-mini for live web
-      // search, but that model depends on components Groq is in the
-      // process of deprecating and was failing consistently — even with a
-      // fallback in place. Simplified to always use the reliable plain
-      // model instead; it just won't have live web results.
-      const completion = await groq.chat.completions.create({
-        messages: messages,
-        model: 'openai/gpt-oss-20b',
-        temperature: 0.6,
-        max_tokens: 180,
-      });
+      // Web search adds real latency, so only pay that cost when the
+      // question actually seems to need current/live info.
+      const needsLiveSearch = (text) => {
+        const t = text.toLowerCase();
+        const keywords = [
+          'today', 'now', 'current', 'currently', 'latest', 'news', 'weather',
+          'price', 'stock', 'score', 'forecast', 'temperature', 'live',
+          'recent', 'this week', 'this year', 'who won', 'when is', 'when did',
+          'release date', 'update', 'happening', 'right now',
+        ];
+        return keywords.some(k => t.includes(k));
+      };
+
+      // A call to Groq that gives up after a timeout instead of hanging —
+      // this is what let a single flaky call silently eat both the
+      // primary attempt AND the fallback attempt last time.
+      const callWithTimeout = (model, ms = 9000) => {
+        return Promise.race([
+          groq.chat.completions.create({ messages, model, temperature: 0.6, max_tokens: 180 }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error(`${model} timed out`)), ms)),
+        ]);
+      };
+
+      let completion;
+      if (needsLiveSearch(userText)) {
+        try {
+          setMicLog('🌐 checking the web...');
+          completion = await callWithTimeout('groq/compound-mini');
+        } catch (searchErr) {
+          console.warn('compound-mini failed, falling back to plain model:', searchErr);
+          setMicLog('⚠️ web search unavailable, answering from memory...');
+          completion = await callWithTimeout('openai/gpt-oss-20b');
+        }
+      } else {
+        completion = await callWithTimeout('openai/gpt-oss-20b');
+      }
 
       const jarvisResponse = completion.choices[0]?.message?.content || "I couldn't process that, Om.";
 
@@ -549,7 +574,7 @@ export default function Terminal({ onStatusChange }) {
         { role: 'assistant', text: errorMsg }
       ]);
       setLatestResponse(errorMsg);
-      await speakResponse('System connection error.');
+      await speakResponse('Sorry Om, I\'m having trouble connecting right now. Give me a moment and try again.');
     } finally {
       setIsProcessing(false);
       if (micEnabledRef.current) {
