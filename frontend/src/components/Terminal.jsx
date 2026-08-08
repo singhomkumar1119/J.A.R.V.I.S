@@ -269,7 +269,20 @@ export default function Terminal({ onStatusChange }) {
   const startRecordingSession = async () => {
     try {
       setMicLog('🔑 requesting mic permission...');
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Explicit constraints instead of a bare {audio: true} — Android can
+      // switch the whole phone into "communication mode" (the same audio
+      // mode calling apps use, which changes what the volume buttons
+      // control) when it detects call-style audio settings. This won't
+      // eliminate that Android behavior entirely (it's an OS-level
+      // decision outside what the web page controls), but it removes the
+      // most common trigger.
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+        }
+      });
       micStreamRef.current = stream;
       isAllowedRef.current = true;
       setMicAllowed(true);
