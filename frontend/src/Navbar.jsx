@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import './Navbar.css';
 
-export default function Navbar({ blobConfig, setBlobConfig, isDragging, setIsDragging }) {
+export default function Navbar({ blobConfig, setBlobConfig, isDragging, setIsDragging, language, setLanguage }) {
   const [showSettings, setShowSettings] = useState(false);
 
   return (
@@ -38,6 +38,25 @@ export default function Navbar({ blobConfig, setBlobConfig, isDragging, setIsDra
                   value={blobConfig.size}
                   onChange={(e) => setBlobConfig({ ...blobConfig, size: parseFloat(e.target.value) })}
                 />
+              </div>
+              <div className="settings-row">
+                <label>Language</label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    className={`btn-action ${language === 'en' ? 'active' : ''}`}
+                    onClick={() => setLanguage('en')}
+                    style={{ padding: '4px 12px', fontSize: '12px' }}
+                  >
+                    English
+                  </button>
+                  <button
+                    className={`btn-action ${language === 'hi' ? 'active' : ''}`}
+                    onClick={() => setLanguage('hi')}
+                    style={{ padding: '4px 12px', fontSize: '12px' }}
+                  >
+                    हिन्दी
+                  </button>
+                </div>
               </div>
               <div className="settings-row" style={{marginTop: '10px'}}>
                 <button 

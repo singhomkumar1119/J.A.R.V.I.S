@@ -31,6 +31,14 @@ function App() {
     h: typeof window !== 'undefined' ? window.innerHeight : 800
   });
 
+  const [language, setLanguage] = useState(localStorage.getItem('jarvis_language') || 'en');
+
+  useEffect(() => {
+    if (language) {
+      localStorage.setItem('jarvis_language', language);
+    }
+  }, [language]);
+
   const [route, setRoute] = useState(typeof window !== 'undefined' ? window.location.hash : '');
 
   useEffect(() => {
@@ -83,6 +91,8 @@ function App() {
         setBlobConfig={setBlobConfig}
         isDragging={isDragging}
         setIsDragging={setIsDragging}
+        language={language}
+        setLanguage={setLanguage}
       />
 
       {/* Top Left: Location Widget */}
@@ -112,7 +122,7 @@ function App() {
 
       {/* Bottom Center: Voice Terminal */}
       <DraggableWidget id="terminal" defaultPos={{ x: Math.max(20, screen.w / 2 - 425), y: screen.h - 90 }}>
-        <Terminal onStatusChange={setJarvisStatus} />
+        <Terminal onStatusChange={setJarvisStatus} language={language} />
       </DraggableWidget>
 
       {/* Privacy notice — conversations are logged, visitors should know */}

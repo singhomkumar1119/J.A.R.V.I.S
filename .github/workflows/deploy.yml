@@ -37,6 +37,7 @@ jobs:
         run: npm run build
         env:
           VITE_GROQ_API_KEY: ${{ secrets.VITE_GROQ_API_KEY }}
+          VITE_SARVAM_API_KEY: ${{ secrets.VITE_SARVAM_API_KEY }}
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

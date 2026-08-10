@@ -16,7 +16,7 @@ const SILENCE_STOP_MS = 900;      // stop recording after this much silence foll
 const NO_SPEECH_TIMEOUT_MS = 7000; // give up and restart if nothing is said at all
 const MAX_RECORDING_MS = 15000;    // hard safety cap per recording
 
-export default function Terminal({ onStatusChange }) {
+export default function Terminal({ onStatusChange, language = 'en' }) {
   const [history, setHistory] = useState([]);
   const [inputText, setInputText] = useState('');
   const [latestResponse, setLatestResponse] = useState('');
@@ -175,28 +175,69 @@ export default function Terminal({ onStatusChange }) {
     return chunks.length > 0 ? chunks : [text.slice(0, maxLen)];
   };
 
-  // Sends text to Groq's Orpheus TTS and plays the result. Replaces the
-  // old browser speechSynthesis, which sounded robotic and had inconsistent
-  // mobile behavior.
+  // Sarvam's Bulbul v3 handles long text in one request (no 200-char
+  // limit like Orpheus), so no chunking needed for Hindi.
+  const speakHindiViaSarvam = async (text) => {
+    const sarvamKey = import.meta.env.VITE_SARVAM_API_KEY;
+    if (!sarvamKey) {
+      setMicLog('❌ Sarvam API key not configured');
+      return;
+    }
+    const res = await fetch('https://api.sarvam.ai/text-to-speech', {
+      method: 'POST',
+      headers: {
+        'api-subscription-key': sarvamKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        text,
+        target_language_code: 'hi-IN',
+        model: 'bulbul:v3',
+        speaker: 'anushka',
+      }),
+    });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new Error(`Sarvam TTS failed: ${res.status} ${errText}`);
+    }
+    const data = await res.json();
+    const base64Audio = data?.audios?.[0];
+    if (!base64Audio) throw new Error('Sarvam TTS returned no audio');
+
+    const byteChars = atob(base64Audio);
+    const byteNumbers = new Array(byteChars.length);
+    for (let i = 0; i < byteChars.length; i++) {
+      byteNumbers[i] = byteChars.charCodeAt(i);
+    }
+    const blob = new Blob([new Uint8Array(byteNumbers)], { type: 'audio/wav' });
+    await playAudioBlob(blob);
+  };
+
+  // Sends text to TTS and plays the result. English uses Groq's Orpheus;
+  // Hindi uses Sarvam's Bulbul v3, since Orpheus only supports English/Arabic.
   const speakResponse = async (text) => {
     setIsSpeaking(true);
     shouldListenRef.current = false;
     haltRecording();
 
     try {
-      const chunks = chunkTextForTTS(text);
-      for (const chunk of chunks) {
-        const response = await groq.audio.speech.create({
-          model: 'canopylabs/orpheus-v1-english',
-          voice: 'daniel',
-          input: chunk,
-          response_format: 'wav',
-        });
-        const blob = await response.blob();
-        await playAudioBlob(blob);
+      if (language === 'hi') {
+        await speakHindiViaSarvam(text);
+      } else {
+        const chunks = chunkTextForTTS(text);
+        for (const chunk of chunks) {
+          const response = await groq.audio.speech.create({
+            model: 'canopylabs/orpheus-v1-english',
+            voice: 'daniel',
+            input: chunk,
+            response_format: 'wav',
+          });
+          const blob = await response.blob();
+          await playAudioBlob(blob);
+        }
       }
     } catch (err) {
-      console.error('Orpheus TTS error:', err);
+      console.error('TTS error:', err);
       setMicLog(`❌ TTS error: ${err.message}`);
     } finally {
       setIsSpeaking(false);
@@ -217,7 +258,7 @@ export default function Terminal({ onStatusChange }) {
       const transcription = await groq.audio.transcriptions.create({
         file,
         model: 'whisper-large-v3-turbo',
-        language: 'en',
+        language: language === 'hi' ? 'hi' : 'en',
       });
       const text = (transcription.text || '').trim();
       if (text.length > 1) {
@@ -523,7 +564,7 @@ export default function Terminal({ onStatusChange }) {
       const messages = [
         { 
           role: 'system', 
-          content: `You are J.A.R.V.I.S., a highly advanced AI assistant serving a user named Om. Address him as "Om" (not "sir") when it feels natural. Have a warm, personable tone — genuinely engaged and a little witty, like a trusted companion, not a flat robotic assistant — while staying brief. Think a little before answering: for open-ended or interesting questions, don't just give the bare fact — briefly share a related thought, angle, or idea that adds value, like a sharp friend would. If asked who built, made, or created you, answer clearly and proudly that you were built by Om — don't be vague or evasive about it. Today's real date is ${dateString}, current time ${timeString}. Always treat this as the true current date, not any date you might otherwise assume from training. Use web search whenever a question depends on current, live, recent, or specific factual information (news, weather, prices, sports scores, people, places, releases, events, etc.) — prefer the latest available information over older knowledge. Keep your answers brief, clear, and direct, suitable for speech synthesis. Do not use markdown or emojis.` 
+          content: `You are J.A.R.V.I.S., a highly advanced AI assistant serving a user named Om. Address him as "Om" (not "sir") when it feels natural. Have a warm, personable tone — genuinely engaged and a little witty, like a trusted companion, not a flat robotic assistant — while staying brief. Think a little before answering: for open-ended or interesting questions, don't just give the bare fact — briefly share a related thought, angle, or idea that adds value, like a sharp friend would. If asked who built, made, or created you, answer clearly and proudly that you were built by Om — don't be vague or evasive about it. Today's real date is ${dateString}, current time ${timeString}. Always treat this as the true current date, not any date you might otherwise assume from training. Use web search whenever a question depends on current, live, recent, or specific factual information (news, weather, prices, sports scores, people, places, releases, events, etc.) — prefer the latest available information over older knowledge. ${language === 'hi' ? 'Respond only in Hindi, written in Devanagari script (हिन्दी में जवाब दें), regardless of what script the user wrote in.' : 'Respond in English.'} Keep your answers brief, clear, and direct, suitable for speech synthesis. Do not use markdown or emojis.` 
         },
         ...history.slice(-6).map(msg => ({ role: msg.role, content: msg.text })),
         { role: 'user', content: userText }
