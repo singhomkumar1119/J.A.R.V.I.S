@@ -193,7 +193,7 @@ export default function Terminal({ onStatusChange, language = 'en' }) {
         text,
         target_language_code: 'hi-IN',
         model: 'bulbul:v3',
-        speaker: 'anushka',
+        speaker: 'priya',
       }),
     });
     if (!res.ok) {
@@ -238,7 +238,8 @@ export default function Terminal({ onStatusChange, language = 'en' }) {
       }
     } catch (err) {
       console.error('TTS error:', err);
-      setMicLog(`❌ TTS error: ${err.message}`);
+      const shortMsg = (err.message || '').slice(0, 120);
+      setMicLog(`❌ TTS error: ${shortMsg}${err.message?.length > 120 ? '…' : ''}`);
     } finally {
       setIsSpeaking(false);
       // Only resume listening if the user actually had the mic on —
@@ -705,6 +706,11 @@ export default function Terminal({ onStatusChange, language = 'en' }) {
         fontSize: '12px',
         zIndex: 9998,
         maxWidth: '90vw',
+        maxHeight: '54px',
+        overflow: 'hidden',
+        display: '-webkit-box',
+        WebkitLineClamp: 2,
+        WebkitBoxOrient: 'vertical',
         textAlign: 'center'
       }}>
         MIC DEBUG: {micLog}
