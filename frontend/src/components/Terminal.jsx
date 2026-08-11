@@ -17,6 +17,12 @@ const NO_SPEECH_TIMEOUT_MS = 7000; // give up and restart if nothing is said at 
 const MAX_RECORDING_MS = 15000;    // hard safety cap per recording
 
 export default function Terminal({ onStatusChange, language = 'en' }) {
+  // Debug UI (MIC DEBUG bar, red error banners) is only for troubleshooting
+  // and shouldn't be visible to normal visitors. Add ?debug=1 to the URL
+  // to see it — invisible otherwise, so the app looks clean when shown to
+  // people.
+  const devMode = typeof window !== 'undefined' && window.location.search.includes('debug=1');
+
   const [history, setHistory] = useState([]);
   const [inputText, setInputText] = useState('');
   const [latestResponse, setLatestResponse] = useState('');
@@ -598,14 +604,14 @@ export default function Terminal({ onStatusChange, language = 'en' }) {
       if (needsLiveSearch(userText)) {
         try {
           setMicLog('🌐 checking the web...');
-          completion = await callWithTimeout('groq/compound-mini');
+          completion = await callWithTimeout('groq/compound');
         } catch (searchErr) {
-          console.warn('compound-mini failed, falling back to plain model:', searchErr);
+          console.warn('compound search failed, falling back to plain model:', searchErr);
           setMicLog('⚠️ web search unavailable, answering from memory...');
-          completion = await callWithTimeout('openai/gpt-oss-20b');
+          completion = await callWithTimeout('openai/gpt-oss-120b');
         }
       } else {
-        completion = await callWithTimeout('openai/gpt-oss-20b');
+        completion = await callWithTimeout('openai/gpt-oss-120b');
       }
 
       let jarvisResponse = completion.choices[0]?.message?.content || "I couldn't process that, Om.";
@@ -625,7 +631,7 @@ export default function Terminal({ onStatusChange, language = 'en' }) {
               { role: 'system', content: 'Translate the following text into natural, conversational Hindi using Devanagari script. Reply with ONLY the Hindi translation, nothing else — no notes, no romanization.' },
               { role: 'user', content: jarvisResponse },
             ],
-            model: 'openai/gpt-oss-20b',
+            model: 'openai/gpt-oss-120b',
             temperature: 0.3,
             max_tokens: 220,
           });
@@ -700,7 +706,7 @@ export default function Terminal({ onStatusChange, language = 'en' }) {
 
   return (
     <div className="jarvis-terminal">
-      {debugError && (
+      {devMode && debugError && (
         <div style={{
           position: 'fixed',
           top: '10px',
@@ -720,6 +726,7 @@ export default function Terminal({ onStatusChange, language = 'en' }) {
           {debugError}
         </div>
       )}
+      {devMode && (
       <div style={{
         position: 'fixed',
         top: debugError ? '55px' : '10px',
@@ -743,6 +750,7 @@ export default function Terminal({ onStatusChange, language = 'en' }) {
       }}>
         MIC DEBUG: {micLog}
       </div>
+      )}
       <div className="jarvis-terminal-bar">
         <button 
           className={`jarvis-mic-btn ${micAllowed ? (isListening ? 'active' : '') : 'denied'}`}
