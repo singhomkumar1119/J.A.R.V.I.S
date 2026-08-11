@@ -193,7 +193,7 @@ export default function Terminal({ onStatusChange, language = 'en' }) {
         text,
         target_language_code: 'hi-IN',
         model: 'bulbul:v3',
-        speaker: 'priya',
+        speaker: 'shreya',
       }),
     });
     if (!res.ok) {
@@ -608,7 +608,35 @@ export default function Terminal({ onStatusChange, language = 'en' }) {
         completion = await callWithTimeout('openai/gpt-oss-20b');
       }
 
-      const jarvisResponse = completion.choices[0]?.message?.content || "I couldn't process that, Om.";
+      let jarvisResponse = completion.choices[0]?.message?.content || "I couldn't process that, Om.";
+
+      // The "respond in Hindi" instruction isn't always followed reliably,
+      // especially when the transcribed input looks like Roman script.
+      // Rather than just hoping, actually check: if Hindi mode is on but
+      // the reply contains no Devanagari characters, it's still in
+      // English — force a quick translation pass so what gets spoken is
+      // guaranteed to actually be Hindi.
+      const hasDevanagari = /[\u0900-\u097F]/.test(jarvisResponse);
+      if (language === 'hi' && !hasDevanagari) {
+        try {
+          setMicLog('🔤 reply came back in English, translating to Hindi...');
+          const translation = await groq.chat.completions.create({
+            messages: [
+              { role: 'system', content: 'Translate the following text into natural, conversational Hindi using Devanagari script. Reply with ONLY the Hindi translation, nothing else — no notes, no romanization.' },
+              { role: 'user', content: jarvisResponse },
+            ],
+            model: 'openai/gpt-oss-20b',
+            temperature: 0.3,
+            max_tokens: 220,
+          });
+          const translated = translation.choices[0]?.message?.content;
+          if (translated && /[\u0900-\u097F]/.test(translated)) {
+            jarvisResponse = translated;
+          }
+        } catch (translateErr) {
+          console.warn('Hindi translation fallback failed:', translateErr);
+        }
+      }
 
       setHistory(prev => [...prev, 
         { role: 'user', text: userText },
