@@ -13,7 +13,9 @@
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.6.1",
     "firebase": "^12.17.1",
+    "framer-motion": "^13.1.0",
     "groq-sdk": "^1.4.1",
+    "lucide-react": "^1.31.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "three": "^0.185.1"

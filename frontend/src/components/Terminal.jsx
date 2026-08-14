@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import Groq from 'groq-sdk';
 import './Terminal.css';
 import { logConversation } from '../logConversation';
+import { motion, AnimatePresence } from 'framer-motion';
+import { MessageCircle, X, Send, Mic, MicOff } from 'lucide-react';
 
 const groq = new Groq({
   apiKey: import.meta.env.VITE_GROQ_API_KEY,
@@ -24,6 +26,7 @@ export default function Terminal({ onStatusChange, language = 'en' }) {
   const devMode = typeof window !== 'undefined' && window.location.search.includes('debug=1');
 
   const [history, setHistory] = useState([]);
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const [inputText, setInputText] = useState('');
   const [latestResponse, setLatestResponse] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -751,35 +754,94 @@ export default function Terminal({ onStatusChange, language = 'en' }) {
         MIC DEBUG: {micLog}
       </div>
       )}
-      <div className="jarvis-terminal-bar">
-        <button 
-          className={`jarvis-mic-btn ${micAllowed ? (isListening ? 'active' : '') : 'denied'}`}
-          onClick={toggleMic}
-          title={isListening ? "Microphone on — tap to turn off" : "Tap to turn on microphone"}
-        >
-          {micAllowed ? '🎙️' : '🎙️❌'}
-        </button>
+      {/* Floating chat toggle button */}
+      <motion.button
+        initial={{ opacity: 0, scale: 0 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.5, delay: 0.5 }}
+        whileHover={{ scale: 1.08 }}
+        whileTap={{ scale: 0.95 }}
+        onClick={() => setIsChatOpen(prev => !prev)}
+        className="jarvis-chat-toggle-btn"
+      >
+        {isChatOpen ? <X size={26} /> : <MessageCircle size={26} />}
+        {!isChatOpen && <span className="jarvis-pulse-ring"></span>}
+      </motion.button>
 
-        <span className="jarvis-prompt">$ J.A.R.V.I.S. &gt;</span>
-        <div className="jarvis-text-container">
-          <input
-            type="text"
-            className="jarvis-input"
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={getPlaceholderText()}
-          />
-        </div>
-        <button 
-          className="jarvis-send-btn"
-          onClick={() => inputText.trim() && processWithGroq(inputText.trim())}
-          title="Send Command"
-        >
-          SEND
-        </button>
-      </div>
-      <div className="jarvis-terminal-handle"></div>
+      <AnimatePresence>
+        {isChatOpen && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+            transition={{ duration: 0.25, ease: 'easeOut' }}
+            className="jarvis-chat-panel"
+          >
+            <div className="jarvis-chat-header">
+              <div className="jarvis-chat-header-title">
+                <span className={`jarvis-status-dot ${isSpeaking ? 'speaking' : isListening ? 'listening' : ''}`}></span>
+                <h3>J.A.R.V.I.S.</h3>
+              </div>
+              <button className="jarvis-chat-close" onClick={() => setIsChatOpen(false)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="jarvis-chat-messages">
+              {history.length === 0 && (
+                <div className="jarvis-chat-empty">Say something, or type a message below.</div>
+              )}
+              {history.map((msg, i) => (
+                <div key={i} className={`jarvis-chat-bubble-row ${msg.role === 'user' ? 'user' : 'assistant'}`}>
+                  <div className={`jarvis-chat-bubble ${msg.role === 'user' ? 'user' : 'assistant'}`}>
+                    {msg.text}
+                  </div>
+                </div>
+              ))}
+              {isProcessing && (
+                <div className="jarvis-chat-bubble-row assistant">
+                  <div className="jarvis-chat-bubble assistant jarvis-typing">
+                    <span></span><span></span><span></span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <form
+              className="jarvis-chat-input-row"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (inputText.trim()) processWithGroq(inputText.trim());
+              }}
+            >
+              <button
+                type="button"
+                className={`jarvis-mic-btn ${micAllowed ? (isListening ? 'active' : '') : 'denied'}`}
+                onClick={toggleMic}
+                title={isListening ? "Microphone on — tap to turn off" : "Tap to turn on microphone"}
+              >
+                {micAllowed ? <Mic size={20} /> : <MicOff size={20} />}
+              </button>
+              <input
+                type="text"
+                className="jarvis-chat-input"
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={getPlaceholderText()}
+              />
+              <button
+                type="submit"
+                className="jarvis-chat-send-btn"
+                disabled={!inputText.trim() || isProcessing}
+                title="Send"
+              >
+                <Send size={18} />
+              </button>
+            </form>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
