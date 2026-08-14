@@ -480,34 +480,53 @@ export default function Terminal({ onStatusChange, language = 'en' }) {
     { keys: ['google drive', 'open drive'], url: 'https://drive.google.com', name: 'Google Drive' },
     { keys: ['google maps', 'open maps'], url: 'https://maps.google.com', name: 'Google Maps' },
     { keys: ['google calendar', 'open calendar'], url: 'https://calendar.google.com', name: 'Google Calendar' },
-    { keys: ['gmail', 'open email', 'open mail'], url: 'https://mail.google.com', name: 'Gmail' },
-    { keys: ['whatsapp'], url: 'https://web.whatsapp.com', name: 'WhatsApp' },
-    { keys: ['telegram'], url: 'https://web.telegram.org', name: 'Telegram' },
-    { keys: ['instagram'], url: 'https://www.instagram.com', name: 'Instagram' },
-    { keys: ['facebook'], url: 'https://www.facebook.com', name: 'Facebook' },
-    { keys: ['twitter', 'open x'], url: 'https://www.x.com', name: 'X' },
-    { keys: ['linkedin'], url: 'https://www.linkedin.com', name: 'LinkedIn' },
-    { keys: ['tiktok'], url: 'https://www.tiktok.com', name: 'TikTok' },
-    { keys: ['snapchat'], url: 'https://web.snapchat.com', name: 'Snapchat' },
-    { keys: ['pinterest'], url: 'https://www.pinterest.com', name: 'Pinterest' },
+    { keys: ['gmail', 'open email', 'open mail'], url: 'https://mail.google.com', name: 'Gmail', androidPackage: 'com.google.android.gm' },
+    { keys: ['whatsapp'], url: 'https://web.whatsapp.com', name: 'WhatsApp', androidPackage: 'com.whatsapp' },
+    { keys: ['telegram'], url: 'https://web.telegram.org', name: 'Telegram', androidPackage: 'org.telegram.messenger' },
+    { keys: ['instagram'], url: 'https://www.instagram.com', name: 'Instagram', androidPackage: 'com.instagram.android' },
+    { keys: ['facebook'], url: 'https://www.facebook.com', name: 'Facebook', androidPackage: 'com.facebook.katana' },
+    { keys: ['twitter', 'open x'], url: 'https://www.x.com', name: 'X', androidPackage: 'com.twitter.android' },
+    { keys: ['linkedin'], url: 'https://www.linkedin.com', name: 'LinkedIn', androidPackage: 'com.linkedin.android' },
+    { keys: ['tiktok'], url: 'https://www.tiktok.com', name: 'TikTok', androidPackage: 'com.zhiliaoapp.musically' },
+    { keys: ['snapchat'], url: 'https://web.snapchat.com', name: 'Snapchat', androidPackage: 'com.snapchat.android' },
+    { keys: ['pinterest'], url: 'https://www.pinterest.com', name: 'Pinterest', androidPackage: 'com.pinterest' },
     { keys: ['notion'], url: 'https://www.notion.so', name: 'Notion' },
     { keys: ['trello'], url: 'https://trello.com', name: 'Trello' },
     { keys: ['slack'], url: 'https://slack.com', name: 'Slack' },
-    { keys: ['netflix'], url: 'https://www.netflix.com', name: 'Netflix' },
+    { keys: ['netflix'], url: 'https://www.netflix.com', name: 'Netflix', androidPackage: 'com.netflix.mediaclient' },
     { keys: ['prime video', 'amazon prime'], url: 'https://www.primevideo.com', name: 'Prime Video' },
     { keys: ['hotstar', 'disney plus', 'disney+'], url: 'https://www.hotstar.com', name: 'Hotstar' },
     { keys: ['twitch'], url: 'https://www.twitch.tv', name: 'Twitch' },
-    { keys: ['amazon'], url: 'https://www.amazon.in', name: 'Amazon' },
-    { keys: ['flipkart'], url: 'https://www.flipkart.com', name: 'Flipkart' },
+    { keys: ['amazon'], url: 'https://www.amazon.in', name: 'Amazon', androidPackage: 'com.amazon.mShop.android.shopping' },
+    { keys: ['flipkart'], url: 'https://www.flipkart.com', name: 'Flipkart', androidPackage: 'com.flipkart.android' },
     { keys: ['chatgpt'], url: 'https://chat.openai.com', name: 'ChatGPT' },
     { keys: ['claude'], url: 'https://claude.ai', name: 'Claude' },
     { keys: ['stack overflow', 'stackoverflow'], url: 'https://stackoverflow.com', name: 'Stack Overflow' },
-    { keys: ['spotify'], url: 'https://open.spotify.com', name: 'Spotify' },
-    { keys: ['reddit'], url: 'https://www.reddit.com', name: 'Reddit' },
+    { keys: ['spotify'], url: 'https://open.spotify.com', name: 'Spotify', androidPackage: 'com.spotify.music' },
+    { keys: ['reddit'], url: 'https://www.reddit.com', name: 'Reddit', androidPackage: 'com.reddit.frontpage' },
     { keys: ['github'], url: 'https://www.github.com', name: 'GitHub' },
-    { keys: ['youtube'], url: 'https://www.youtube.com', name: 'YouTube' },
+    { keys: ['youtube'], url: 'https://www.youtube.com', name: 'YouTube', androidPackage: 'com.google.android.youtube' },
     { keys: ['google'], url: 'https://www.google.com', name: 'Google' },
   ];
+
+  // Android Chrome supports intent:// URLs that launch the actual native
+  // app directly if it's installed, with an automatic fallback to the
+  // normal web URL if it's not (or on other browsers). This is the real
+  // fix for "why does it just open the browser instead of the app."
+  const isAndroidChrome = () => {
+    const ua = navigator.userAgent || '';
+    return /Android/.test(ua) && /Chrome/.test(ua) && !/Edg|OPR|SamsungBrowser/.test(ua);
+  };
+
+  const openApp = (app) => {
+    if (app.androidPackage && isAndroidChrome()) {
+      const fallback = encodeURIComponent(app.url);
+      const intentUrl = `intent://#Intent;package=${app.androidPackage};S.browser_fallback_url=${fallback};end`;
+      window.location.href = intentUrl;
+    } else {
+      window.open(app.url, '_blank');
+    }
+  };
 
   const executeLocalAction = (userText) => {
     const text = userText.toLowerCase().trim();
@@ -518,7 +537,7 @@ export default function Terminal({ onStatusChange, language = 'en' }) {
 
     for (const app of APP_LINKS) {
       if (app.keys.some(key => normText.includes(normalize(key)))) {
-        window.open(app.url, '_blank');
+        openApp(app);
         return `Opening ${app.name} for you, sir.`;
       }
     }
