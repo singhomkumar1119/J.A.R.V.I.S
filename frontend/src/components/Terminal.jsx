@@ -455,9 +455,9 @@ export default function Terminal({ onStatusChange, language = 'en' }) {
   useEffect(() => {
     const buildGreeting = () => {
       const hour = new Date().getHours();
-      let g = 'Good evening, Om.';
-      if (hour < 12) g = 'Good morning, Om.';
-      else if (hour < 17) g = 'Good afternoon, Om.';
+      let g = 'Good evening, sir.';
+      if (hour < 12) g = 'Good morning, sir.';
+      else if (hour < 17) g = 'Good afternoon, sir.';
       return `${g} How can I help you?`;
     };
 
@@ -519,19 +519,19 @@ export default function Terminal({ onStatusChange, language = 'en' }) {
     for (const app of APP_LINKS) {
       if (app.keys.some(key => normText.includes(normalize(key)))) {
         window.open(app.url, '_blank');
-        return `Opening ${app.name} for you, Om.`;
+        return `Opening ${app.name} for you, sir.`;
       }
     }
 
     if (text.startsWith('search ') || text.startsWith('google ')) {
       const q = text.replace(/^(search|google)\s+/i, '');
       window.open(`https://www.google.com/search?q=${encodeURIComponent(q)}`, '_blank');
-      return `Searching Google for ${q}, Om.`;
+      return `Searching Google for ${q}, sir.`;
     }
     if (text.startsWith('play ')) {
       const song = text.replace(/^play\s+/i, '');
       window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(song)}`, '_blank');
-      return `Searching YouTube for ${song}, Om.`;
+      return `Searching YouTube for ${song}, sir.`;
     }
 
     return null;
@@ -574,7 +574,7 @@ export default function Terminal({ onStatusChange, language = 'en' }) {
       const messages = [
         { 
           role: 'system', 
-          content: `You are J.A.R.V.I.S., a highly advanced AI assistant serving a user named Om. Address him as "Om" (not "sir") when it feels natural. Have a warm, personable tone — genuinely engaged and a little witty, like a trusted companion, not a flat robotic assistant — while staying brief. Think a little before answering: for open-ended or interesting questions, don't just give the bare fact — briefly share a related thought, angle, or idea that adds value, like a sharp friend would. If asked who built, made, or created you, answer clearly and proudly that you were built by Om — don't be vague or evasive about it. Today's real date is ${dateString}, current time ${timeString}. Always treat this as the true current date, not any date you might otherwise assume from training. Use web search whenever a question depends on current, live, recent, or specific factual information (news, weather, prices, sports scores, people, places, releases, events, etc.) — prefer the latest available information over older knowledge. ${language === 'hi' ? 'Respond only in Hindi, written in Devanagari script (हिन्दी में जवाब दें), regardless of what script the user wrote in.' : 'Respond in English.'} Keep your answers brief, clear, and direct, suitable for speech synthesis. Do not use markdown or emojis.` 
+          content: `You are J.A.R.V.I.S., an advanced AI assistant in the style of Tony Stark's JARVIS — composed, precise, quietly witty, unfailingly courteous. Always address the user as "sir." Keep a calm, dry, understated sense of humor; be helpful and direct without being overly casual or gushing. Think a little before answering: for open-ended or interesting questions, don't just give the bare fact — offer a sharp, economical observation that adds value, the way JARVIS would. If asked who built, made, or created you, answer clearly and proudly that you were built by Om — don't be vague or evasive about it. Today's real date is ${dateString}, current time ${timeString}. Always treat this as the true current date, not any date you might otherwise assume from training. Use web search whenever a question depends on current, live, recent, or specific factual information (news, weather, prices, sports scores, people, places, releases, events, etc.) — prefer the latest available information over older knowledge. ${language === 'hi' ? 'Respond only in Hindi, written in Devanagari script (हिन्दी में जवाब दें), regardless of what script the user wrote in.' : 'Respond in English.'} Keep your answers brief, clear, and direct, suitable for speech synthesis. Do not use markdown or emojis.` 
         },
         ...history.slice(-6).map(msg => ({ role: msg.role, content: msg.text })),
         { role: 'user', content: userText }
@@ -617,7 +617,7 @@ export default function Terminal({ onStatusChange, language = 'en' }) {
         completion = await callWithTimeout('openai/gpt-oss-120b');
       }
 
-      let jarvisResponse = completion.choices[0]?.message?.content || "I couldn't process that, Om.";
+      let jarvisResponse = completion.choices[0]?.message?.content || "I couldn't process that, sir.";
 
       // The "respond in Hindi" instruction isn't always followed reliably,
       // especially when the transcribed input looks like Roman script.
@@ -666,7 +666,7 @@ export default function Terminal({ onStatusChange, language = 'en' }) {
         { role: 'assistant', text: errorMsg }
       ]);
       setLatestResponse(errorMsg);
-      await speakResponse('Sorry Om, I\'m having trouble connecting right now. Give me a moment and try again.');
+      await speakResponse('My apologies, sir — I\'m having trouble connecting right now. Give me a moment and try again.');
     } finally {
       setIsProcessing(false);
       if (micEnabledRef.current) {
