@@ -1,14 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
-import Groq from 'groq-sdk';
 import './Terminal.css';
 import { logConversation } from '../logConversation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageCircle, X, Send, Mic, MicOff } from 'lucide-react';
 
-const groq = new Groq({
-  apiKey: import.meta.env.VITE_GROQ_API_KEY,
-  dangerouslyAllowBrowser: true 
-});
+// All AI calls now go through our own backend (/api/*) instead of hitting
+// Groq/Sarvam/NVIDIA directly from the browser. This keeps API keys
+// server-side only, and is required for NVIDIA specifically since their
+// API has no CORS support for direct browser calls.
 
 // Tuning for the volume-based silence detector (replaces the old browser
 // SpeechRecognition silence handling). RMS is measured on a 0-128 scale
@@ -187,27 +186,14 @@ export default function Terminal({ onStatusChange, language = 'en' }) {
   // Sarvam's Bulbul v3 handles long text in one request (no 200-char
   // limit like Orpheus), so no chunking needed for Hindi.
   const speakHindiViaSarvam = async (text) => {
-    const sarvamKey = import.meta.env.VITE_SARVAM_API_KEY;
-    if (!sarvamKey) {
-      setMicLog('❌ Sarvam API key not configured');
-      return;
-    }
-    const res = await fetch('https://api.sarvam.ai/text-to-speech', {
+    const res = await fetch('/api/sarvam-tts', {
       method: 'POST',
-      headers: {
-        'api-subscription-key': sarvamKey,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        text,
-        target_language_code: 'hi-IN',
-        model: 'bulbul:v3',
-        speaker: 'shreya',
-      }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, speaker: 'shreya' }),
     });
     if (!res.ok) {
-      const errText = await res.text().catch(() => '');
-      throw new Error(`Sarvam TTS failed: ${res.status} ${errText}`);
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || `Sarvam TTS failed: ${res.status}`);
     }
     const data = await res.json();
     const base64Audio = data?.audios?.[0];
@@ -235,12 +221,15 @@ export default function Terminal({ onStatusChange, language = 'en' }) {
       } else {
         const chunks = chunkTextForTTS(text);
         for (const chunk of chunks) {
-          const response = await groq.audio.speech.create({
-            model: 'canopylabs/orpheus-v1-english',
-            voice: 'daniel',
-            input: chunk,
-            response_format: 'wav',
+          const response = await fetch('/api/groq-tts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: chunk }),
           });
+          if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.error || `TTS request failed: ${response.status}`);
+          }
           const blob = await response.blob();
           await playAudioBlob(blob);
         }
@@ -258,18 +247,23 @@ export default function Terminal({ onStatusChange, language = 'en' }) {
     }
   };
 
-  // Sends a recorded audio Blob to Groq Whisper for transcription, then
-  // feeds the result into the normal chat pipeline.
+  // Sends a recorded audio Blob to our backend, which forwards it to Groq
+  // Whisper for transcription, then feeds the result into the normal chat
+  // pipeline.
   const transcribeAndSend = async (blob, mimeType) => {
     setMicLog('📤 transcribing...');
     try {
-      const ext = mimeType.includes('mp4') ? 'm4a' : 'webm';
-      const file = new File([blob], `speech.${ext}`, { type: mimeType });
-      const transcription = await groq.audio.transcriptions.create({
-        file,
-        model: 'whisper-large-v3-turbo',
-        language: language === 'hi' ? 'hi' : 'en',
+      const lang = language === 'hi' ? 'hi' : 'en';
+      const response = await fetch(`/api/groq-transcribe?language=${lang}`, {
+        method: 'POST',
+        headers: { 'Content-Type': mimeType || 'application/octet-stream' },
+        body: blob,
       });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `Transcription failed: ${response.status}`);
+      }
+      const transcription = await response.json();
       const text = (transcription.text || '').trim();
       if (text.length > 1) {
         setMicLog(`📝 heard: "${text}"`);
@@ -612,13 +606,43 @@ export default function Terminal({ onStatusChange, language = 'en' }) {
         return keywords.some(k => t.includes(k));
       };
 
-      // A call to Groq that gives up after a timeout instead of hanging —
-      // this is what let a single flaky call silently eat both the
-      // primary attempt AND the fallback attempt last time.
-      const callWithTimeout = (model, ms = 9000) => {
+      // A call to our backend that gives up after a timeout instead of
+      // hanging — this is what let a single flaky call silently eat both
+      // the primary attempt AND the fallback attempt in the past.
+      const callGroqWithTimeout = (model, ms = 9000) => {
         return Promise.race([
-          groq.chat.completions.create({ messages, model, temperature: 0.6, max_tokens: 180 }),
+          fetch('/api/groq-chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ messages, model, temperature: 0.6, max_tokens: 180 }),
+          }).then(async (r) => {
+            if (!r.ok) {
+              const errData = await r.json().catch(() => ({}));
+              throw new Error(errData.error || `Groq chat failed: ${r.status}`);
+            }
+            return r.json();
+          }),
           new Promise((_, reject) => setTimeout(() => reject(new Error(`${model} timed out`)), ms)),
+        ]);
+      };
+
+      // NVIDIA's free-tier endpoint can be slower under load, and the
+      // Ultra (550B) model is much larger than a typical fast model, so
+      // it gets a generous timeout before falling back to Groq.
+      const callNvidiaWithTimeout = (ms = 18000) => {
+        return Promise.race([
+          fetch('/api/nvidia-chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ messages, max_tokens: 220 }),
+          }).then(async (r) => {
+            if (!r.ok) {
+              const errData = await r.json().catch(() => ({}));
+              throw new Error(errData.error || `NVIDIA chat failed: ${r.status}`);
+            }
+            return r.json();
+          }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('NVIDIA Nemotron timed out')), ms)),
         ]);
       };
 
@@ -626,14 +650,21 @@ export default function Terminal({ onStatusChange, language = 'en' }) {
       if (needsLiveSearch(userText)) {
         try {
           setMicLog('🌐 checking the web...');
-          completion = await callWithTimeout('groq/compound');
+          completion = await callGroqWithTimeout('groq/compound');
         } catch (searchErr) {
           console.warn('compound search failed, falling back to plain model:', searchErr);
           setMicLog('⚠️ web search unavailable, answering from memory...');
-          completion = await callWithTimeout('openai/gpt-oss-120b');
+          completion = await callGroqWithTimeout('openai/gpt-oss-120b');
         }
       } else {
-        completion = await callWithTimeout('openai/gpt-oss-120b');
+        try {
+          setMicLog('🧠 thinking (Nemotron)...');
+          completion = await callNvidiaWithTimeout();
+        } catch (nvidiaErr) {
+          console.warn('NVIDIA Nemotron failed, falling back to Groq:', nvidiaErr);
+          setMicLog('⚠️ Nemotron unavailable, using backup brain...');
+          completion = await callGroqWithTimeout('openai/gpt-oss-120b');
+        }
       }
 
       let jarvisResponse = completion.choices[0]?.message?.content || "I couldn't process that, sir.";
@@ -648,16 +679,21 @@ export default function Terminal({ onStatusChange, language = 'en' }) {
       if (language === 'hi' && !hasDevanagari) {
         try {
           setMicLog('🔤 reply came back in English, translating to Hindi...');
-          const translation = await groq.chat.completions.create({
-            messages: [
-              { role: 'system', content: 'Translate the following text into natural, conversational Hindi using Devanagari script. Reply with ONLY the Hindi translation, nothing else — no notes, no romanization.' },
-              { role: 'user', content: jarvisResponse },
-            ],
-            model: 'openai/gpt-oss-120b',
-            temperature: 0.3,
-            max_tokens: 220,
+          const translationRes = await fetch('/api/groq-chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              messages: [
+                { role: 'system', content: 'Translate the following text into natural, conversational Hindi using Devanagari script. Reply with ONLY the Hindi translation, nothing else — no notes, no romanization.' },
+                { role: 'user', content: jarvisResponse },
+              ],
+              model: 'openai/gpt-oss-120b',
+              temperature: 0.3,
+              max_tokens: 220,
+            }),
           });
-          const translated = translation.choices[0]?.message?.content;
+          const translation = await translationRes.json();
+          const translated = translation.choices?.[0]?.message?.content;
           if (translated && /[\u0900-\u097F]/.test(translated)) {
             jarvisResponse = translated;
           }

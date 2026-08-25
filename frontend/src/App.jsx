@@ -3,17 +3,14 @@ import VoiceBlob from './components/blob.jsx';
 import Navbar from './Navbar';
 import Terminal from './components/Terminal.jsx';
 import Background3D from './components/Background3D.jsx';
-import StatusPanel from './components/StatusPanel.jsx';
 import DraggableWidget from './components/DraggableWidget.jsx';
-import LocationWidget from './components/LocationWidget.jsx';
-import SystemInfoWidget from './components/SystemInfoWidget.jsx';
-import ActivityMonitorWidget from './components/ActivityMonitorWidget.jsx';
 import GreetingWidget from './components/GreetingWidget.jsx';
 import AdminDashboard from './components/AdminDashboard.jsx';
+import './App.css';
 
 function App() {
   const [blobConfig, setBlobConfig] = useState({
-    color: localStorage.getItem('jarvis_blob_color') || '#0084ff',
+    color: localStorage.getItem('jarvis_blob_color') || '#9333ea',
     size: 1,
     position: { x: 0, y: 0 }
   });
@@ -72,10 +69,13 @@ function App() {
         width: '100vw',
         height: '100vh',
         overflow: 'hidden',
-        backgroundColor: '#020813'
+        backgroundColor: '#0a0118'
       }}
     >
-      {/* 3D Cinematic Starfield/Hologram Background */}
+      {/* Slowly morphing purple/pink/black gradient — the "liquid" feel */}
+      <div className="jarvis-morph-bg" />
+
+      {/* 3D Cinematic Starfield Background */}
       <Background3D />
 
       {/* 3D Voice Blob - Fixed Center */}
@@ -93,27 +93,8 @@ function App() {
         setIsDragging={setIsDragging}
         language={language}
         setLanguage={setLanguage}
+        jarvisStatus={jarvisStatus}
       />
-
-      {/* Top Left: Location Widget */}
-      <DraggableWidget id="location" defaultPos={{ x: 30, y: 100 }}>
-        <LocationWidget />
-      </DraggableWidget>
-
-      {/* Middle Left: Activity Monitor */}
-      <DraggableWidget id="activity" defaultPos={{ x: 30, y: 300 }}>
-        <ActivityMonitorWidget status={jarvisStatus} />
-      </DraggableWidget>
-
-      {/* Top Right: System Diagnostics */}
-      <DraggableWidget id="diagnostics" defaultPos={{ x: Math.max(20, screen.w - 280), y: 100 }}>
-        <StatusPanel status={jarvisStatus} />
-      </DraggableWidget>
-
-      {/* Middle Right: System Info (Clock/Weather) */}
-      <DraggableWidget id="sysinfo" defaultPos={{ x: Math.max(20, screen.w - 280), y: 350 }}>
-        <SystemInfoWidget commandCount={jarvisStatus.commandCount || 0} />
-      </DraggableWidget>
 
       {/* Bottom Center: Greeting Widget */}
       <DraggableWidget id="greeting" defaultPos={{ x: Math.max(20, screen.w / 2 - 170), y: screen.h - 180 }}>
@@ -132,7 +113,7 @@ function App() {
         left: '50%',
         transform: 'translateX(-50%)',
         fontSize: '10px',
-        color: 'rgba(143, 247, 255, 0.35)',
+        color: 'rgba(236, 143, 255, 0.35)',
         fontFamily: 'monospace',
         zIndex: 5,
         pointerEvents: 'none',

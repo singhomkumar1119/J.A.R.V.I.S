@@ -108,8 +108,8 @@ export default function VoiceBlob({ config, setConfig, isDragging }) {
     const mount = mountRef.current;
     const params = {
       timeScale: 1.2, plasmaScale: 0.2, plasmaBrightness: 1.31, voidThreshold: 0.09,
-      colorDeep: 0x001433, colorMid: 0x0084ff, colorBright: 0x00ffe1,
-      shellColor: 0x0066ff, shellOpacity: 0.41,
+      colorDeep: 0x14001f, colorMid: 0x9333ea, colorBright: 0xf472b6,
+      shellColor: 0x7c3aed, shellOpacity: 0.41,
     };
 
     const scene = new THREE.Scene();
@@ -134,7 +134,7 @@ export default function VoiceBlob({ config, setConfig, isDragging }) {
 
     const mainGroup = new THREE.Group();
     scene.add(mainGroup);
-    mainGroup.add(new THREE.PointLight(0x0088ff, 2.0, 10));
+    mainGroup.add(new THREE.PointLight(0xa855f7, 2.0, 10));
 
     // Shell
     const shellGeo = new THREE.SphereGeometry(1.0, 64, 64);
@@ -146,7 +146,7 @@ export default function VoiceBlob({ config, setConfig, isDragging }) {
     };
     const shellBackMat = new THREE.ShaderMaterial({
       ...shellShader,
-      uniforms: { uColor: { value: new THREE.Color(0x000055) }, uOpacity: { value: 0.3 } },
+      uniforms: { uColor: { value: new THREE.Color(0x180028) }, uOpacity: { value: 0.3 } },
       transparent: true, blending: THREE.AdditiveBlending, side: THREE.BackSide, depthWrite: false,
     });
     const shellFrontMat = new THREE.ShaderMaterial({
@@ -261,11 +261,14 @@ export default function VoiceBlob({ config, setConfig, isDragging }) {
       
       const currentConfig = configRef.current;
 
-      // Color Updates
+      // Color Updates — bright highlight shifts hue toward pink/magenta
+      // (not just lighter), and the deep shadow goes toward near-black,
+      // for a genuine purple-to-pink cinematic gradient across the surface
+      // rather than one flat tint.
       const baseColor = new THREE.Color(currentConfig.color);
       plasmaMat.uniforms.uColorMid.value.copy(baseColor);
-      plasmaMat.uniforms.uColorBright.value.copy(baseColor).offsetHSL(0, 0, 0.2);
-      plasmaMat.uniforms.uColorDeep.value.copy(baseColor).offsetHSL(0, 0, -0.3);
+      plasmaMat.uniforms.uColorBright.value.copy(baseColor).offsetHSL(0.09, 0.15, 0.22);
+      plasmaMat.uniforms.uColorDeep.value.copy(baseColor).offsetHSL(-0.03, 0.1, -0.36);
       shellFrontMat.uniforms.uColor.value.copy(baseColor);
       
       // Voice-reactive scale + user size
@@ -324,7 +327,7 @@ export default function VoiceBlob({ config, setConfig, isDragging }) {
           borderRadius: '50%',
           pointerEvents: 'auto',
           cursor: isDragging ? (isDraggingNow ? 'grabbing' : 'grab') : 'default',
-          border: isDragging ? '2px dashed #00ff88' : 'none',
+          border: isDragging ? '2px dashed #ec4899' : 'none',
           boxShadow: isDragging 
             ? '0 0 40px rgba(0, 255, 136, 0.4), inset 0 0 20px rgba(0, 255, 136, 0.2)' 
             : 'none',
