@@ -1,64 +1,74 @@
 .navbar-container {
   position: fixed;
-  top: 24px;
+  top: 30px;
   left: 50%;
   transform: translateX(-50%);
   width: 90%;
   max-width: 1050px;
-  height: 62px;
-
+  height: 60px;
+  
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 34px;
+  padding: 0 40px 0 35px;
   z-index: 100;
+  
+  /* We remove clip-path and background from here so the dropdown isn't cut off */
 }
 
-/* Liquid Glass panel — rounded pill, soft purple/pink glow */
+/* The actual sci-fi background panel */
 .navbar-bg {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: -1;
-
-  border-radius: 999px;
-  filter: drop-shadow(0 0 20px rgba(147, 51, 234, 0.25)) drop-shadow(0 12px 35px rgba(0, 0, 0, 0.85));
-
-  background: linear-gradient(135deg, rgba(40, 10, 60, 0.55), rgba(15, 5, 25, 0.65));
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  border: 1px solid rgba(236, 72, 153, 0.18);
-  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.08), inset 0 0 40px rgba(147, 51, 234, 0.08);
-
+  z-index: -1; /* Keep it behind the links */
+  
+  /* Sci-Fi HUD Shape: Top-Left and Bottom-Right Chamfers */
+  clip-path: polygon(20px 0%, 100% 0%, 100% calc(100% - 20px), calc(100% - 20px) 100%, 0% 100%, 0% 20px);
+  filter: drop-shadow(0 0 15px rgba(0, 220, 255, 0.2)) drop-shadow(0 10px 30px rgba(0, 0, 0, 0.8));
+  
+  /* Liquid Glass Base */
+  background: rgba(5, 15, 25, 0.65);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(0, 220, 255, 0.15);
+  border-left: 2px solid rgba(0, 220, 255, 0.6);
+  box-shadow: inset 0 0 30px rgba(0, 220, 255, 0.1);
+  
   transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
-/* Soft top highlight — the "glass" catch-light */
+/* Glowing Accent Line on the far right */
+.navbar-bg::after {
+  content: '';
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  right: 15px; 
+  width: 2px;
+  background: #00dcff;
+  box-shadow: 0 0 8px #00dcff;
+  opacity: 0.7;
+}
+
+/* Subtle top glow line */
 .navbar-bg::before {
   content: '';
   position: absolute;
   top: 0;
-  left: 10%;
-  right: 10%;
+  left: 20px;
+  width: 150px;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
-}
-
-.navbar-bg::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 999px;
-  background: radial-gradient(ellipse 60% 100% at 85% 50%, rgba(236, 72, 153, 0.12), transparent 70%);
-  pointer-events: none;
+  background: linear-gradient(90deg, #00dcff, transparent);
+  box-shadow: 0 0 5px #00dcff;
 }
 
 .navbar-container:hover .navbar-bg {
-  background: linear-gradient(135deg, rgba(50, 12, 75, 0.65), rgba(18, 6, 30, 0.75));
-  border-color: rgba(236, 72, 153, 0.35);
-  filter: drop-shadow(0 0 28px rgba(147, 51, 234, 0.35)) drop-shadow(0 15px 40px rgba(0, 0, 0, 0.9));
+  background: rgba(8, 20, 35, 0.75);
+  border-left: 2px solid rgba(0, 220, 255, 0.9);
+  filter: drop-shadow(0 0 25px rgba(0, 220, 255, 0.3)) drop-shadow(0 15px 40px rgba(0, 0, 0, 0.9));
 }
 .navbar-container:hover {
   transform: translateX(-50%) translateY(-2px);
@@ -66,30 +76,27 @@
 
 .navbar-logo {
   font-family: 'Orbitron', sans-serif;
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 700;
+  color: #00dcff; 
   letter-spacing: 3px;
   cursor: pointer;
-  background: linear-gradient(90deg, #c084fc, #f472b6);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  filter: drop-shadow(0 0 12px rgba(196, 132, 252, 0.4));
+  text-shadow: 0 0 15px rgba(0, 220, 255, 0.5);
 }
 
 .navbar-links {
   display: flex;
-  align-items: center;
-  gap: 28px;
+  gap: 30px;
+  margin-right: 30px; 
 }
 
 .nav-link {
   font-family: 'Rajdhani', sans-serif;
-  font-size: 15px;
+  font-size: 16px; 
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.65);
+  color: rgba(255, 255, 255, 0.6);
   text-decoration: none;
-  letter-spacing: 1.5px;
+  letter-spacing: 2px;
   text-transform: uppercase;
   position: relative;
   transition: all 0.3s ease;
@@ -99,19 +106,19 @@
 
 .nav-link:hover {
   color: #fff;
-  text-shadow: 0 0 10px rgba(236, 72, 153, 0.6);
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
 }
 
+/* Sci-Fi Underline Glow Effect */
 .nav-link::after {
   content: '';
   position: absolute;
-  bottom: -6px;
+  bottom: -4px;
   left: 0;
   width: 0%;
   height: 2px;
-  border-radius: 2px;
-  background: linear-gradient(90deg, #a855f7, #ec4899);
-  box-shadow: 0 0 8px rgba(236, 72, 153, 0.7);
+  background: #00dcff;
+  box-shadow: 0 0 8px #00dcff;
   transition: width 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
@@ -126,28 +133,21 @@
 
 .settings-panel {
   position: absolute;
-  top: 54px;
+  top: 50px;
   right: -20px;
-  width: 300px;
-  max-height: 80vh;
-  overflow-y: auto;
-  background: linear-gradient(160deg, rgba(35, 10, 55, 0.85), rgba(12, 4, 20, 0.92));
-  backdrop-filter: blur(28px) saturate(200%);
-  -webkit-backdrop-filter: blur(28px) saturate(200%);
-  border: 1px solid rgba(236, 72, 153, 0.22);
-  border-radius: 22px;
+  width: 260px;
+  background: rgba(5, 15, 25, 0.85);
+  backdrop-filter: blur(25px) saturate(200%);
+  -webkit-backdrop-filter: blur(25px) saturate(200%);
+  border: 1px solid rgba(0, 220, 255, 0.2);
+  border-left: 2px solid rgba(0, 220, 255, 0.6);
+  clip-path: polygon(15px 0%, 100% 0%, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0% 100%, 0% 15px);
   padding: 22px;
   display: flex;
   flex-direction: column;
   gap: 16px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.85), inset 0 1px 1px rgba(255, 255, 255, 0.06);
-  animation: fadeInDown 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
-}
-
-.settings-system-info {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  box-shadow: 0 15px 50px rgba(0,0,0,0.8);
+  animation: fadeInDown 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
 @keyframes fadeInDown {
@@ -160,17 +160,17 @@
   justify-content: space-between;
   align-items: center;
   font-family: 'Rajdhani', sans-serif;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
   color: #fff;
-  letter-spacing: 0.5px;
+  letter-spacing: 1px;
 }
 
 .settings-row input[type="color"] {
-  width: 42px;
-  height: 32px;
-  border: 1px solid rgba(236, 72, 153, 0.3);
-  border-radius: 10px;
+  width: 45px;
+  height: 35px;
+  border: 1px solid rgba(0, 220, 255, 0.3);
+  border-radius: 4px;
   cursor: pointer;
   background: none;
   padding: 2px;
@@ -178,42 +178,42 @@
 
 .settings-row input[type="range"] {
   width: 130px;
-  accent-color: #ec4899;
+  accent-color: #00dcff;
   cursor: pointer;
 }
 
 .btn-action {
   width: 100%;
-  padding: 11px;
-  border: 1px solid rgba(236, 72, 153, 0.3);
-  border-radius: 14px;
-  background: rgba(236, 72, 153, 0.1);
+  padding: 12px;
+  border: 1px solid rgba(0, 220, 255, 0.3);
+  background: rgba(0, 220, 255, 0.1);
   color: #fff;
   font-family: 'Orbitron', sans-serif;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 1.5px;
+  letter-spacing: 2px;
   cursor: pointer;
   transition: all 0.3s ease;
   text-transform: uppercase;
+  clip-path: polygon(10px 0%, 100% 0%, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0% 100%, 0% 10px);
 }
 
 .btn-action:hover {
-  background: rgba(236, 72, 153, 0.22);
-  border-color: rgba(236, 72, 153, 0.55);
-  box-shadow: 0 0 15px rgba(236, 72, 153, 0.3);
+  background: rgba(0, 220, 255, 0.25);
+  border-color: rgba(0, 220, 255, 0.6);
+  box-shadow: 0 0 15px rgba(0, 220, 255, 0.3);
 }
 
 .btn-action.active {
-  background: linear-gradient(90deg, rgba(147, 51, 234, 0.35), rgba(236, 72, 153, 0.35));
-  border-color: rgba(236, 72, 153, 0.7);
-  color: #fff;
-  box-shadow: 0 0 22px rgba(236, 72, 153, 0.4);
-  animation: pulseBtn 1.8s infinite;
+  background: rgba(0, 255, 136, 0.2);
+  border-color: rgba(0, 255, 136, 0.6);
+  color: #00ff88;
+  box-shadow: 0 0 25px rgba(0, 255, 136, 0.4);
+  animation: pulseBtn 1.5s infinite;
 }
 
 @keyframes pulseBtn {
-  0% { box-shadow: 0 0 10px rgba(236, 72, 153, 0.3); }
-  50% { box-shadow: 0 0 24px rgba(236, 72, 153, 0.55); }
-  100% { box-shadow: 0 0 10px rgba(236, 72, 153, 0.3); }
+  0% { box-shadow: 0 0 10px rgba(0,255,136,0.3); }
+  50% { box-shadow: 0 0 25px rgba(0,255,136,0.6); }
+  100% { box-shadow: 0 0 10px rgba(0,255,136,0.3); }
 }

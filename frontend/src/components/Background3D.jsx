@@ -56,7 +56,7 @@ export default function Background3D() {
     }
     starGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
     const starMat = new THREE.PointsMaterial({
-      color: 0xc9a8ff,
+      color: 0x8fd9ff,
       size: 1.1,
       transparent: true,
       opacity: 0.75,
@@ -94,8 +94,8 @@ export default function Background3D() {
     // Two simple rotating rings — cheap MeshBasicMaterial, no shader.
     // ═══════════════════════════════════════════════════════════
     const ringDefs = [
-      { radius: 90, color: 0x9333ea, opacity: 0.06, tiltX: Math.PI / 2.2, speed: 0.015 },
-      { radius: 130, color: 0xec4899, opacity: 0.04, tiltX: Math.PI / 1.9, speed: -0.01 },
+      { radius: 90, color: 0x00ccff, opacity: 0.05, tiltX: Math.PI / 2.2, speed: 0.015 },
+      { radius: 130, color: 0x27e6ff, opacity: 0.035, tiltX: Math.PI / 1.9, speed: -0.01 },
     ];
     const rings = ringDefs.map((def) => {
       const geo = new THREE.RingGeometry(def.radius, def.radius + 0.6, 64);
@@ -173,10 +173,10 @@ export default function Background3D() {
         width: '100%',
         height: '100%',
         zIndex: 0,
-        // No background color/gradient here — the animated .jarvis-morph-bg
-        // layer in App.jsx handles that now. Keeping this transparent lets
-        // the starfield/rings render on top of the morphing gradient.
         pointerEvents: 'none',
+        // The nebula "glow" now comes from this free CSS gradient instead
+        // of an expensive per-pixel shader.
+        background: 'radial-gradient(ellipse at center, #0a1830 0%, #050d1c 45%, #020712 100%)',
       }}
     />
   );

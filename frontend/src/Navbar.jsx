@@ -1,13 +1,8 @@
 import { useState } from 'react';
 import './Navbar.css';
-import StatusPanel from './components/StatusPanel.jsx';
-import SystemInfoWidget from './components/SystemInfoWidget.jsx';
-import ActivityMonitorWidget from './components/ActivityMonitorWidget.jsx';
-import LocationWidget from './components/LocationWidget.jsx';
 
-export default function Navbar({ blobConfig, setBlobConfig, isDragging, setIsDragging, language, setLanguage, jarvisStatus }) {
+export default function Navbar({ blobConfig, setBlobConfig, isDragging, setIsDragging, language, setLanguage }) {
   const [showSettings, setShowSettings] = useState(false);
-  const [showSystem, setShowSystem] = useState(false);
 
   return (
     <nav className="navbar-container">
@@ -71,24 +66,6 @@ export default function Navbar({ blobConfig, setBlobConfig, isDragging, setIsDra
                   {isDragging ? 'SAVE POSITION' : 'MOVE BLOB'}
                 </button>
               </div>
-
-              <div className="settings-row" style={{marginTop: '10px'}}>
-                <button
-                  className={`btn-action ${showSystem ? 'active' : ''}`}
-                  onClick={() => setShowSystem(!showSystem)}
-                >
-                  {showSystem ? 'HIDE SYSTEM INFO' : 'SHOW SYSTEM INFO'}
-                </button>
-              </div>
-
-              {showSystem && (
-                <div className="settings-system-info">
-                  <LocationWidget />
-                  <ActivityMonitorWidget status={jarvisStatus} />
-                  <StatusPanel status={jarvisStatus} />
-                  <SystemInfoWidget commandCount={jarvisStatus?.commandCount || 0} />
-                </div>
-              )}
             </div>
           )}
         </div>
